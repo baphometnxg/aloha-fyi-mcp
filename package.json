@@ -1,0 +1,39 @@
+{
+  "name": "@aloha-fyi/mcp-hawaii",
+  "version": "1.0.0",
+  "description": "Hawaii tourism MCP server — tours, events, restaurants, deals across 4 islands. 2,583 bookable experiences with affiliate tracking. Powered by aloha.fyi.",
+  "main": "dist/stdio.js",
+  "bin": {
+    "aloha-fyi-mcp": "dist/stdio.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/stdio.js",
+    "start:http": "node dist/http.js"
+  },
+  "keywords": [
+    "mcp",
+    "hawaii",
+    "tourism",
+    "travel",
+    "oahu",
+    "maui",
+    "tours",
+    "concierge",
+    "ai-assistant",
+    "affiliate"
+  ],
+  "author": "Michael Crain <alohatours@proton.me>",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
+    "pg": "^8.12.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0"
+  }
+}
