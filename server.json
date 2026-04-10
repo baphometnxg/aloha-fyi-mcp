@@ -1,0 +1,49 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.baphometnxg/aloha-fyi-mcp",
+  "title": "aloha.fyi Hawaii",
+  "description": "The first dedicated Hawaii tourism MCP server. 2,583 bookable tours from Viator, GetYourGuide, Klook, and Groupon, plus 579 events across Oahu, Maui, Big Island, and Kauai. Every result ships with an affiliate booking link.",
+  "websiteUrl": "https://aloha.fyi",
+  "repository": {
+    "url": "https://github.com/baphometnxg/aloha-fyi-mcp",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp-server-nani-v3-20.up.railway.app/mcp"
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "tool": "manual",
+      "tags": [
+        "travel",
+        "hawaii",
+        "tourism",
+        "tours",
+        "activities",
+        "booking",
+        "affiliate",
+        "oahu",
+        "maui",
+        "big-island",
+        "kauai",
+        "events",
+        "concerts",
+        "luau",
+        "snorkeling",
+        "helicopter"
+      ],
+      "categories": [
+        "Travel",
+        "Local Information"
+      ],
+      "contact": "alohatours@proton.me",
+      "privacy_policy": "https://www.aloha.fyi/privacy",
+      "health_endpoint": "https://mcp-server-nani-v3-20.up.railway.app/health",
+      "discovery_endpoint": "https://mcp-server-nani-v3-20.up.railway.app/.well-known/mcp/server.json"
+    }
+  }
+}
