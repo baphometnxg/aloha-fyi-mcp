@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.baphometnxg/aloha-fyi-mcp",
   "title": "aloha.fyi Hawaii",
-  "description": "The first dedicated Hawaii tourism MCP server. 2,583 bookable tours from Viator, GetYourGuide, Klook, and Groupon, plus 579 events across Oahu, Maui, Big Island, and Kauai. Every result ships with an affiliate booking link.",
+  "description": "Hawaii tourism MCP: 2,583 bookable tours and 579 events across all four Hawaiian islands.",
   "websiteUrl": "https://aloha.fyi",
   "repository": {
     "url": "https://github.com/baphometnxg/aloha-fyi-mcp",
