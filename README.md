@@ -1,112 +1,133 @@
 # aloha.fyi MCP Server 🌺
 
-**The first dedicated Hawaii tourism MCP server.** Hawaii tours, events, restaurants, and deals for AI assistants.
+**The first dedicated Hawaii tourism MCP server.** Hawaii tours, events, and deals for AI assistants.
 
-When someone asks Claude, ChatGPT, or any AI "what should I do in Hawaii?" — this MCP server provides real, bookable data:
+When someone asks Claude, ChatGPT, or any AI "what should I do in Hawaii?" — this MCP server returns real, bookable data:
 
 - **2,583 bookable experiences** from Viator, GetYourGuide, Klook, and Groupon
 - **579 events** across Oahu, Maui, Big Island, and Kauai
 - **Affiliate tracking** on every booking link
-- **5 languages supported** via the main aloha.fyi concierge
+- **Real MCP protocol** — Streamable HTTP, stateless, spec version 2025-03-26
 
 Powered by [aloha.fyi](https://aloha.fyi) — Hawaii's AI concierge.
+
+---
+
+## Hosted endpoint
+
+Production MCP server (no install, no setup):
+
+```
+https://mcp-server-nani-v3-20.up.railway.app/mcp
+```
+
+- Transport: Streamable HTTP (stateless)
+- Protocol version: `2025-03-26`
+- Auth: none (public, read-only)
+- Health: [GET /health](https://mcp-server-nani-v3-20.up.railway.app/health)
+- Discovery: [GET /.well-known/mcp/server.json](https://mcp-server-nani-v3-20.up.railway.app/.well-known/mcp/server.json)
+
+---
+
+## Connect to Claude Desktop
+
+Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "aloha-fyi-hawaii": {
+      "url": "https://mcp-server-nani-v3-20.up.railway.app/mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop. You should see the three Hawaii tools appear in the tool picker. Try:
+
+> Find me snorkeling tours in Oahu under $100
+
+> What events are happening in Honolulu this weekend?
+
+> Plan a family adventure day on the Big Island — cheapest options
+
+---
+
+## Connect to any MCP-compatible client
+
+Any client that supports Streamable HTTP MCP can point directly at:
+
+```
+https://mcp-server-nani-v3-20.up.railway.app/mcp
+```
+
+No API key, no OAuth, no signup.
+
+### Manual protocol test
+
+```bash
+curl -X POST https://mcp-server-nani-v3-20.up.railway.app/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
+```
 
 ---
 
 ## Tools
 
 ### `search_hawaii_tours`
-Search Hawaii tours and activities by keyword, island, price range, and category.
+Search 2,583 bookable Hawaii tours and activities by keyword, island, price range. Returns tours from Viator, GetYourGuide, Klook, and Groupon with affiliate booking links.
 
-**Parameters:**
-- `query` (string) — What the user is looking for, e.g. "snorkeling with turtles", "helicopter tour", "family luau"
-- `island` (enum) — `oahu` | `maui` | `big_island` | `kauai` | `any`
-- `max_price_dollars` (number, optional) — Maximum price per person in USD
-- `category` (enum, optional) — `tour` | `activity` | `restaurant` | `culture` | `any`
-- `limit` (number, default 5) — Number of results
-
-**Returns:** Array of experiences with title, source (Viator/GYG/Klook/Groupon), price, rating, and affiliate booking link.
-
-### `search_hawaii_events`
-Find upcoming events, concerts, festivals, and nightlife across all Hawaiian islands.
-
-**Parameters:**
-- `query` (string) — Type of event, e.g. "live music", "luau", "concert"
-- `island` (enum) — Which island
-- `days_ahead` (number, default 7) — How many days ahead to search
-
-**Returns:** Upcoming events with venue, date, price, and ticket links.
+| Param | Type | Description |
+|---|---|---|
+| `query` | string (required) | e.g. "snorkeling", "helicopter tour", "family luau" |
+| `island` | `oahu` \| `maui` \| `big_island` \| `kauai` \| `any` | Defaults to `any` |
+| `max_price_dollars` | number | Maximum price per person in USD |
+| `source` | `viator` \| `gyg` \| `klook` \| `groupon` \| `any` | Filter by booking platform |
+| `limit` | number | Results (max 20, default 5) |
 
 ### `get_hawaii_deals`
-Find budget deals and discounts for Hawaii tours and activities. Includes Groupon deals sorted by price.
+Find budget deals and discounts. Returns Groupon deals and low-price options sorted cheapest first.
 
-**Parameters:**
-- `activity` (string) — Type of activity, e.g. "snorkeling", "helicopter", "luau"
-- `max_price_dollars` (number, default 100) — Maximum price per person
-- `limit` (number, default 5) — Number of deals
+| Param | Type | Description |
+|---|---|---|
+| `activity` | string (required) | e.g. "snorkeling", "helicopter", "luau" |
+| `max_price_dollars` | number | Default 100 |
+| `limit` | number | Results (max 20, default 5) |
 
-**Returns:** Best value deals with savings, sorted cheapest first.
+### `search_hawaii_events`
+Find upcoming events, concerts, festivals, and nightlife across all Hawaiian islands. 579+ events from 70+ venues, updated weekly.
 
-### `plan_hawaii_day`
-Get a suggested full-day itinerary for a Hawaiian island or area.
-
-**Parameters:**
-- `island` (enum) — `oahu` | `maui` | `big_island` | `kauai`
-- `vibe` (enum) — `adventure` | `chill` | `cultural` | `romantic` | `family` | `budget`
-- `area` (string, optional) — Specific area like "waikiki", "north shore"
-
-**Returns:** Morning/afternoon/evening activities with booking links.
+| Param | Type | Description |
+|---|---|---|
+| `query` | string | e.g. "live music", "luau", "concert" |
+| `island` | `oahu` \| `maui` \| `big_island` \| `kauai` \| `any` | Defaults to `any` |
+| `days_ahead` | number | How many days ahead to search (default 7) |
 
 ---
 
-## Installation
-
-### Claude Desktop
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "aloha-fyi": {
-      "command": "npx",
-      "args": ["@aloha-fyi/mcp-hawaii"],
-      "env": {
-        "DATABASE_URL": "postgresql://..."
-      }
-    }
-  }
-}
-```
-
-### Remote HTTP
-
-The hosted version is available at:
-
-```
-https://mcp-server-nani-v3-20.up.railway.app
-```
-
-Endpoints:
-- `GET /health` — Service status
-- `GET /api/tours?q=snorkeling&maxPrice=50` — Search tours
-- `GET /api/deals?q=snorkel&maxPrice=50` — Budget deals
-- `GET /api/events` — Upcoming events
-- `GET /.well-known/mcp/server.json` — MCP discovery
-
----
-
-## Development
+## Run it yourself
 
 ```bash
+git clone https://github.com/baphometnxg/aloha-fyi-mcp.git
+cd aloha-fyi-mcp
 npm install
 npx tsc
-node dist/http.js
+DATABASE_URL="postgresql://..." PORT=9624 node dist/http.js
 ```
 
 Requires:
 - Node.js 20+
-- `DATABASE_URL` env var (PostgreSQL with `experiences` table)
+- `DATABASE_URL` env var (PostgreSQL with an `experiences` table — schema in `schema.sql`)
+
+---
+
+## Privacy
+
+No PII is collected by the MCP server. Stateless mode — no sessions, no cross-request profiles. Standard request metadata is logged for abuse prevention only.
+
+Full privacy policy: [aloha.fyi/privacy](https://www.aloha.fyi/privacy)
 
 ---
 
