@@ -2,13 +2,13 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.baphometnxg/aloha-fyi-mcp",
   "title": "aloha.fyi Hawaii",
-  "description": "Hawaii tourism MCP: 2,583 bookable tours and 579 events across all four Hawaiian islands.",
+  "description": "Hawaii MCP: tours, events, weather, restaurants, and day-plan itineraries across 4 islands.",
   "websiteUrl": "https://aloha.fyi",
   "repository": {
     "url": "https://github.com/baphometnxg/aloha-fyi-mcp",
     "source": "github"
   },
-  "version": "1.0.0",
+  "version": "1.1.0",
   "remotes": [
     {
       "type": "streamable-http",

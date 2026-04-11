@@ -1117,6 +1117,78 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
+// Aggregate stats for Mission Control + external monitoring
+app.get("/stats", async (req: Request, res: Response) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (!pool) {
+    res.json({ error: "db_not_configured" });
+    return;
+  }
+  const hoursParam = parseInt(String(req.query.hours || "24"), 10);
+  const hours = Math.max(1, Math.min(720, isNaN(hoursParam) ? 24 : hoursParam));
+  try {
+    const [summary, byClient, byTool, topQueries, clicks, clicksByClient] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(DISTINCT client_name)::int AS distinct_clients,
+                COUNT(DISTINCT ip_hash)::int AS distinct_ips,
+                SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END)::int AS errors,
+                ROUND(AVG(latency_ms))::int AS avg_ms,
+                ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms))::int AS p95_ms
+         FROM mcp_requests WHERE created_at > NOW() - ($1 || ' hours')::interval`,
+        [String(hours)]
+      ),
+      pool.query(
+        `SELECT COALESCE(client_name, '(unknown)') AS client, COUNT(*)::int AS calls
+         FROM mcp_requests WHERE created_at > NOW() - ($1 || ' hours')::interval
+         GROUP BY client_name ORDER BY calls DESC LIMIT 10`,
+        [String(hours)]
+      ),
+      pool.query(
+        `SELECT COALESCE(tool_name, '(n/a)') AS tool, COUNT(*)::int AS calls
+         FROM mcp_requests WHERE created_at > NOW() - ($1 || ' hours')::interval
+           AND method = 'tools/call'
+         GROUP BY tool_name ORDER BY calls DESC LIMIT 10`,
+        [String(hours)]
+      ),
+      pool.query(
+        `SELECT query_text, COUNT(*)::int AS n FROM mcp_requests
+         WHERE created_at > NOW() - ($1 || ' hours')::interval
+           AND query_text IS NOT NULL AND query_text <> ''
+         GROUP BY query_text ORDER BY n DESC LIMIT 10`,
+        [String(hours)]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS clicks FROM mcp_clicks
+         WHERE clicked_at > NOW() - ($1 || ' hours')::interval`,
+        [String(hours)]
+      ),
+      pool.query(
+        `SELECT COALESCE(t.client_name, '(unknown)') AS client, COUNT(*)::int AS clicks
+         FROM mcp_clicks c JOIN mcp_click_targets t ON t.code = c.code
+         WHERE c.clicked_at > NOW() - ($1 || ' hours')::interval
+         GROUP BY t.client_name ORDER BY clicks DESC LIMIT 10`,
+        [String(hours)]
+      ),
+    ]);
+
+    res.json({
+      window_hours: hours,
+      generated_at: new Date().toISOString(),
+      summary: summary.rows[0] || {},
+      by_client: byClient.rows,
+      by_tool: byTool.rows,
+      top_queries: topQueries.rows,
+      clicks: clicks.rows[0]?.clicks ?? 0,
+      click_by_client: clicksByClient.rows,
+      cache: cacheStats(),
+      rate_limit_per_min: RATE_LIMIT_PER_MIN,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "stats_failed" });
+  }
+});
+
 // Well-known MCP discovery
 app.get("/.well-known/mcp/server.json", (_req: Request, res: Response) => {
   res.json({
