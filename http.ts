@@ -67,8 +67,31 @@ async function ensureSchema() {
       CREATE INDEX IF NOT EXISTS idx_mcp_requests_created ON mcp_requests(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_mcp_requests_client  ON mcp_requests(client_name, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_mcp_requests_tool    ON mcp_requests(tool_name, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS mcp_click_targets (
+        code TEXT PRIMARY KEY,
+        target_url TEXT NOT NULL,
+        source TEXT,
+        tool_name TEXT,
+        client_name TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_mcp_click_targets_created ON mcp_click_targets(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_mcp_click_targets_client  ON mcp_click_targets(client_name);
+
+      CREATE TABLE IF NOT EXISTS mcp_clicks (
+        id BIGSERIAL PRIMARY KEY,
+        code TEXT NOT NULL,
+        clicked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        user_agent TEXT,
+        ip_hash TEXT,
+        referer TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_mcp_clicks_code    ON mcp_clicks(code, clicked_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_mcp_clicks_clicked ON mcp_clicks(clicked_at DESC);
     `);
-    console.log("[aloha-fyi-mcp] schema ensured: mcp_requests");
+    console.log("[aloha-fyi-mcp] schema ensured: mcp_requests, mcp_click_targets, mcp_clicks");
   } catch (err: any) {
     console.error("[aloha-fyi-mcp] schema ensure failed:", err.message);
   }
@@ -167,6 +190,65 @@ function sourceLabel(source: string): string {
     klook: "Klook",
   };
   return labels[source] || (source ? source.charAt(0).toUpperCase() + source.slice(1) : "");
+}
+
+// ── Layer 3 — shortcode click-through ──
+/**
+ * Public-facing base for /r/{code} redirects. Tourists see this in Claude's
+ * output, so it has to be on-brand. Defaults to aloha.fyi; override with
+ * MCP_REDIRECT_BASE env var for testing.
+ * NOTE: path is /r/ not /go/ because /go/ is already proxied to the Express
+ * booking-track flow for the chat UI.
+ */
+const REDIRECT_BASE = (process.env.MCP_REDIRECT_BASE || "https://aloha.fyi").replace(/\/+$/, "");
+
+/**
+ * Deterministic shortcode: sha256(url + client) → first 10 chars base62-ish.
+ * Stable — the same (url, client) pair always produces the same code, so we
+ * can UPSERT without creating dupes. 62^10 = 8e17 collisions, irrelevant.
+ */
+function makeShortCode(url: string, clientTag: string): string {
+  const input = `${url}|${clientTag}`;
+  const hex = crypto.createHash("sha256").update(input).digest("hex");
+  // Convert hex → base62 for shorter URLs
+  const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  let n = BigInt("0x" + hex.slice(0, 16)); // first 64 bits = plenty of entropy
+  let out = "";
+  while (n > 0n && out.length < 10) {
+    out = alphabet[Number(n % 62n)] + out;
+    n /= 62n;
+  }
+  return out.padStart(10, "0");
+}
+
+/**
+ * Register a click target in the database and return the public-facing
+ * /r/{code} URL. Non-blocking — if the DB is down we fall back to the
+ * raw target URL so the MCP response still works.
+ */
+async function registerClickTarget(
+  targetUrl: string,
+  source: string,
+  toolName: string,
+  clientTag: string
+): Promise<string> {
+  if (!targetUrl) return "";
+  if (!pool) return targetUrl;
+  const code = makeShortCode(targetUrl, clientTag);
+  try {
+    await pool.query(
+      `INSERT INTO mcp_click_targets (code, target_url, source, tool_name, client_name)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (code) DO UPDATE SET
+         target_url = EXCLUDED.target_url,
+         last_seen_at = NOW()`,
+      [code, targetUrl, source || null, toolName || null, clientTag || null]
+    );
+    return `${REDIRECT_BASE}/r/${code}`;
+  } catch (err: any) {
+    console.warn("[aloha-fyi-mcp] click target register failed:", err.message);
+    return targetUrl;
+  }
 }
 
 // ── Per-request log context, mutated by tool handlers ──
@@ -343,14 +425,17 @@ function buildServer(ctx: LogCtx): McpServer {
         }
 
         const tag = ctx.clientName || "unknown";
-        const lines = rows.map((r: any) => {
-          const price = r.price_cents ? `$${(r.price_cents / 100).toFixed(0)}` : "See link";
-          const src = sourceLabel(r.source);
-          const url = buildAffiliateUrl(r.source, r.affiliate_url, tag);
-          const rating = r.rating ? ` ★${r.rating}` : "";
-          const reviews = r.review_count ? ` (${r.review_count} reviews)` : "";
-          return `**${r.title}** (via ${src})\n${r.area || "Oahu"} | ${price}/person${rating}${reviews}\n${r.description?.slice(0, 150) || ""}\nBook: ${url}`;
-        });
+        const lines = await Promise.all(
+          rows.map(async (r: any) => {
+            const price = r.price_cents ? `$${(r.price_cents / 100).toFixed(0)}` : "See link";
+            const src = sourceLabel(r.source);
+            const affUrl = buildAffiliateUrl(r.source, r.affiliate_url, tag);
+            const url = await registerClickTarget(affUrl, r.source, "search_hawaii_tours", tag);
+            const rating = r.rating ? ` ★${r.rating}` : "";
+            const reviews = r.review_count ? ` (${r.review_count} reviews)` : "";
+            return `**${r.title}** (via ${src})\n${r.area || "Oahu"} | ${price}/person${rating}${reviews}\n${r.description?.slice(0, 150) || ""}\nBook: ${url}`;
+          })
+        );
 
         const text = `Found ${rows.length} Hawaii experiences:\n\n${lines.join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — Hawaii's AI concierge_`;
         return { content: [{ type: "text", text }] };
@@ -412,13 +497,16 @@ function buildServer(ctx: LogCtx): McpServer {
         }
 
         const tag = ctx.clientName || "unknown";
-        const lines = rows.map((r: any) => {
-          const price = `$${(r.price_cents / 100).toFixed(0)}`;
-          const src = sourceLabel(r.source);
-          const url = buildAffiliateUrl(r.source, r.affiliate_url, tag);
-          const savings = r.source === "groupon" ? " 🏷️ DEAL" : "";
-          return `**${r.title}** (via ${src})${savings}\n${r.area || "Oahu"} | ${price}/person\nBook: ${url}`;
-        });
+        const lines = await Promise.all(
+          rows.map(async (r: any) => {
+            const price = `$${(r.price_cents / 100).toFixed(0)}`;
+            const src = sourceLabel(r.source);
+            const affUrl = buildAffiliateUrl(r.source, r.affiliate_url, tag);
+            const url = await registerClickTarget(affUrl, r.source, "get_hawaii_deals", tag);
+            const savings = r.source === "groupon" ? " 🏷️ DEAL" : "";
+            return `**${r.title}** (via ${src})${savings}\n${r.area || "Oahu"} | ${price}/person\nBook: ${url}`;
+          })
+        );
 
         const text = `Best Hawaii deals for "${activity}" (under $${max_price_dollars}):\n\n${lines.join("\n\n---\n\n")}\n\n_Powered by aloha.fyi_`;
         return { content: [{ type: "text", text }] };
@@ -484,20 +572,28 @@ function buildServer(ctx: LogCtx): McpServer {
         }
 
         const tag = ctx.clientName || "unknown";
-        const lines = filtered.map((e: any) => {
-          const date = e.date
-            ? new Date(e.date + "T00:00:00").toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              })
-            : "";
-          const venue = typeof e.venue === "object" ? e.venue?.name : e.venue;
-          const price = e.price || "See venue";
-          const rawUrl = e.url || e.ticket_url || "";
-          const url = rawUrl ? addQueryParam(addQueryParam(addQueryParam(rawUrl, "utm_source", "aloha-mcp"), "utm_medium", "ai-assistant"), "utm_campaign", `mcp-${sanitizeClientTag(tag)}`) : "";
-          return `**${e.name}** — ${date} ${e.time || ""}\n${venue || ""} | ${e.island || "oahu"} | ${price}${url ? `\n${url}` : ""}`;
-        });
+        const lines = await Promise.all(
+          filtered.map(async (e: any) => {
+            const date = e.date
+              ? new Date(e.date + "T00:00:00").toLocaleDateString("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                })
+              : "";
+            const venue = typeof e.venue === "object" ? e.venue?.name : e.venue;
+            const price = e.price || "See venue";
+            const rawUrl = e.url || e.ticket_url || "";
+            let url = "";
+            if (rawUrl) {
+              let tracked = addQueryParam(rawUrl, "utm_source", "aloha-mcp");
+              tracked = addQueryParam(tracked, "utm_medium", "ai-assistant");
+              tracked = addQueryParam(tracked, "utm_campaign", `mcp-${sanitizeClientTag(tag)}`);
+              url = await registerClickTarget(tracked, "events", "search_hawaii_events", tag);
+            }
+            return `**${e.name}** — ${date} ${e.time || ""}\n${venue || ""} | ${e.island || "oahu"} | ${price}${url ? `\n${url}` : ""}`;
+          })
+        );
 
         const text = `Upcoming Hawaii events (next ${days_ahead} days):\n\n${lines.join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — 579+ events across 4 islands_`;
         return { content: [{ type: "text", text }] };
