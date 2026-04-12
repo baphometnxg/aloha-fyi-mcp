@@ -286,10 +286,71 @@ async function registerClickTarget(
  */
 const RATE_LIMIT_PER_MIN = parseInt(process.env.MCP_RATE_LIMIT || "60", 10);
 const RATE_LIMIT_BYPASS_TOKEN = process.env.MCP_BYPASS_TOKEN || "";
+const MCP_API_KEY = (process.env.MCP_API_KEY || "").trim();
+const MCP_DAILY_QUOTA = Math.max(10, parseInt(process.env.MCP_DAILY_QUOTA || "500", 10));
 interface BucketEntry {
   hits: number[];
 }
 const rateBuckets = new Map<string, BucketEntry>();
+
+/** Per ip_hash UTC day counter — limits catalog scraping / log flooding beyond per-minute cap. */
+interface DailyBucket {
+  day: string;
+  count: number;
+}
+const dailyQuotaBuckets = new Map<string, DailyBucket>();
+
+/** IPs that hit 429 often (brute-force / abuse signal). */
+const recent429ByIp = new Map<string, number[]>();
+
+function record429Flood(ipHash: string | null): void {
+  if (!ipHash) return;
+  const now = Date.now();
+  const hourAgo = now - 3_600_000;
+  let arr = recent429ByIp.get(ipHash) || [];
+  arr = arr.filter((t) => t > hourAgo);
+  arr.push(now);
+  recent429ByIp.set(ipHash, arr);
+  if (arr.length > 10) {
+    console.warn(`[MCP-ABUSE] ip_hash=${ipHash} received ${arr.length} 429s in the last hour`);
+  }
+}
+
+function consumeDailyQuota(ipHash: string): { allowed: boolean; retryAfter: number } {
+  const day = new Date().toISOString().slice(0, 10);
+  let b = dailyQuotaBuckets.get(ipHash);
+  if (!b || b.day !== day) b = { day, count: 0 };
+  if (b.count >= MCP_DAILY_QUOTA) {
+    const now = new Date();
+    const endOfUtcDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+    const retryAfter = Math.max(60, Math.ceil((endOfUtcDay - now.getTime()) / 1000));
+    return { allowed: false, retryAfter };
+  }
+  b.count++;
+  dailyQuotaBuckets.set(ipHash, b);
+  return { allowed: true, retryAfter: 0 };
+}
+
+/** Reject absurd tool string args (scraping / prompt stuffing). */
+function validateMcpToolArguments(body: unknown): string | null {
+  if (body == null) return null;
+  const calls = Array.isArray(body) ? body : [body];
+  for (const call of calls) {
+    if (!call || typeof call !== "object") continue;
+    const c = call as Record<string, unknown>;
+    if (c.method !== "tools/call") continue;
+    const params = c.params as Record<string, unknown> | undefined;
+    const args = (params?.arguments || {}) as Record<string, unknown>;
+    const stringFields = ["query", "activity", "caption", "text", "description", "postCaption"];
+    for (const key of stringFields) {
+      const v = args[key];
+      if (typeof v !== "string") continue;
+      if (v.length > 200) return `param_${key}_too_long`;
+      if (v.length === 1) return `param_${key}_too_short`;
+    }
+  }
+  return null;
+}
 
 function checkRateLimit(key: string): { allowed: boolean; retryAfter: number } {
   const now = Date.now();
@@ -304,6 +365,7 @@ function checkRateLimit(key: string): { allowed: boolean; retryAfter: number } {
   if (b.hits.length >= RATE_LIMIT_PER_MIN) {
     const oldest = b.hits[0];
     const retryAfter = Math.max(1, Math.ceil((oldest + 60_000 - now) / 1000));
+    record429Flood(key);
     return { allowed: false, retryAfter };
   }
   b.hits.push(now);
@@ -1113,6 +1175,7 @@ app.get("/health", (_req: Request, res: Response) => {
     db: !!pool,
     observability: "layer1+layer2+layer3",
     rate_limit_per_min: RATE_LIMIT_PER_MIN,
+    daily_quota_per_ip: MCP_DAILY_QUOTA,
     cache: cacheStats(),
   });
 });
@@ -1183,6 +1246,7 @@ app.get("/stats", async (req: Request, res: Response) => {
       click_by_client: clicksByClient.rows,
       cache: cacheStats(),
       rate_limit_per_min: RATE_LIMIT_PER_MIN,
+      daily_quota_per_ip: MCP_DAILY_QUOTA,
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "stats_failed" });
@@ -1219,17 +1283,49 @@ app.post("/mcp", async (req: Request, res: Response) => {
     req.socket?.remoteAddress ||
     "";
   ctx.ipHash = hashIp(rawIp);
+
+  const bypassHeader = req.get("x-rate-limit-token") || "";
+  const bypassToken = !!(RATE_LIMIT_BYPASS_TOKEN && bypassHeader === RATE_LIMIT_BYPASS_TOKEN);
+  const suppliedKey =
+    (req.get("x-mcp-api-key") || "").trim() ||
+    (req.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  const keyBypass = !!(MCP_API_KEY && suppliedKey === MCP_API_KEY);
+
+  // Anonymous clients must send User-Agent so we can attribute traffic and block silent scrapers.
+  if (!keyBypass && !(ctx.userAgent && ctx.userAgent.trim())) {
+    ctx.error = "missing_user_agent";
+    ctx.statusCode = 403;
+    ctx.latencyMs = 0;
+    writeLog(ctx);
+    return res.status(403).json({
+      jsonrpc: "2.0",
+      error: { code: -32001, message: "User-Agent header required" },
+      id: null,
+    });
+  }
+
   enrichLogCtxFromBody(ctx, req.body);
+  const argErr = validateMcpToolArguments(req.body);
+  if (argErr) {
+    ctx.error = argErr;
+    ctx.statusCode = 400;
+    ctx.latencyMs = 0;
+    writeLog(ctx);
+    return res.status(400).json({
+      jsonrpc: "2.0",
+      error: { code: -32602, message: "Invalid tool arguments (string params: 2–200 chars)" },
+      id: null,
+    });
+  }
+
   // Stateless fallback: if initialize didn't identify the client (e.g. this
   // is a tools/call request), derive a client name from the User-Agent header.
   if (!ctx.clientName) {
     ctx.clientName = deriveClientFromUA(ctx.userAgent);
   }
 
-  // Rate limit by ip_hash (bypass with token for load testing)
-  const bypassHeader = req.get("x-rate-limit-token") || "";
-  const bypass = RATE_LIMIT_BYPASS_TOKEN && bypassHeader === RATE_LIMIT_BYPASS_TOKEN;
-  if (!bypass && ctx.ipHash) {
+  // Rate limit + daily quota by ip_hash (bypass with MCP_BYPASS_TOKEN or valid MCP_API_KEY)
+  if (!keyBypass && !bypassToken && ctx.ipHash) {
     const rl = checkRateLimit(ctx.ipHash);
     if (!rl.allowed) {
       ctx.error = "rate_limited";
@@ -1242,6 +1338,24 @@ app.post("/mcp", async (req: Request, res: Response) => {
         error: {
           code: -32005,
           message: `Rate limit exceeded: ${RATE_LIMIT_PER_MIN}/min. Retry in ${rl.retryAfter}s.`,
+        },
+        id: null,
+      });
+      return;
+    }
+    const dq = consumeDailyQuota(ctx.ipHash);
+    if (!dq.allowed) {
+      record429Flood(ctx.ipHash);
+      ctx.error = "daily_quota";
+      ctx.statusCode = 429;
+      ctx.latencyMs = 0;
+      writeLog(ctx);
+      res.setHeader("Retry-After", String(dq.retryAfter));
+      res.status(429).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32006,
+          message: `Daily quota exceeded (${MCP_DAILY_QUOTA}/day). Retry in ${dq.retryAfter}s.`,
         },
         id: null,
       });
