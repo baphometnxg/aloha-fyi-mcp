@@ -1,0 +1,1710 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AAAK v0.1 — Agent-to-Agent Adaptive Knowledge",
+  "description": "Structured response contract for aloha-fyi-mcp tools. See docs/aaak-spec.md.",
+  "protocol": "aaak/0.1",
+  "definitions": {
+    "SearchHawaiiToursResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "result"
+            },
+            "tool": {
+              "type": "string",
+              "const": "search_hawaii_tours"
+            },
+            "protocol": {
+              "type": "string",
+              "const": "aaak/0.1"
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "viator",
+                      "gyg",
+                      "klook",
+                      "groupon"
+                    ]
+                  },
+                  "island": {
+                    "type": "string",
+                    "enum": [
+                      "oahu",
+                      "maui",
+                      "big_island",
+                      "kauai"
+                    ]
+                  },
+                  "area": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "category": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "price_cents": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "rating": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 5
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "review_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 140
+                  },
+                  "booking_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "is_deal": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "title",
+                  "source",
+                  "island",
+                  "area",
+                  "category",
+                  "price_cents",
+                  "rating",
+                  "review_count",
+                  "description",
+                  "booking_url",
+                  "is_deal"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "meta": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cached": {
+                  "type": "boolean"
+                },
+                "source_diversity": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "empty_result"
+            },
+            "tool": {
+              "$ref": "#/definitions/SearchHawaiiToursResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/SearchHawaiiToursResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/SearchHawaiiToursResponse/anyOf/0/properties/query"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SearchHawaiiToursResponse/anyOf/0/properties/results/items"
+              },
+              "minItems": 0,
+              "maxItems": 0
+            },
+            "meta": {
+              "$ref": "#/definitions/SearchHawaiiToursResponse/anyOf/0/properties/meta"
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "kind": {
+              "type": "string",
+              "const": "error"
+            },
+            "tool": {
+              "$ref": "#/definitions/SearchHawaiiToursResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/SearchHawaiiToursResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/SearchHawaiiToursResponse/anyOf/0/properties/query"
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "db_not_configured",
+                    "db_query_failed",
+                    "not_enough_data",
+                    "external_api_failed",
+                    "rate_limited",
+                    "daily_quota_exceeded",
+                    "invalid_arguments"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "GetHawaiiDealsResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "result"
+            },
+            "tool": {
+              "type": "string",
+              "const": "get_hawaii_deals"
+            },
+            "protocol": {
+              "type": "string",
+              "const": "aaak/0.1"
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "viator",
+                      "gyg",
+                      "klook",
+                      "groupon"
+                    ]
+                  },
+                  "island": {
+                    "type": "string",
+                    "enum": [
+                      "oahu",
+                      "maui",
+                      "big_island",
+                      "kauai"
+                    ]
+                  },
+                  "area": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "category": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "price_cents": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "rating": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 5
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "review_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 140
+                  },
+                  "booking_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "is_deal": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "title",
+                  "source",
+                  "island",
+                  "area",
+                  "category",
+                  "price_cents",
+                  "rating",
+                  "review_count",
+                  "description",
+                  "booking_url",
+                  "is_deal"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "meta": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cached": {
+                  "type": "boolean"
+                },
+                "source_diversity": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "empty_result"
+            },
+            "tool": {
+              "$ref": "#/definitions/GetHawaiiDealsResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/GetHawaiiDealsResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/GetHawaiiDealsResponse/anyOf/0/properties/query"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/GetHawaiiDealsResponse/anyOf/0/properties/results/items"
+              },
+              "minItems": 0,
+              "maxItems": 0
+            },
+            "meta": {
+              "$ref": "#/definitions/GetHawaiiDealsResponse/anyOf/0/properties/meta"
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "kind": {
+              "type": "string",
+              "const": "error"
+            },
+            "tool": {
+              "$ref": "#/definitions/GetHawaiiDealsResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/GetHawaiiDealsResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/GetHawaiiDealsResponse/anyOf/0/properties/query"
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "db_not_configured",
+                    "db_query_failed",
+                    "not_enough_data",
+                    "external_api_failed",
+                    "rate_limited",
+                    "daily_quota_exceeded",
+                    "invalid_arguments"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SearchHawaiiEventsResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "result"
+            },
+            "tool": {
+              "type": "string",
+              "const": "search_hawaii_events"
+            },
+            "protocol": {
+              "type": "string",
+              "const": "aaak/0.1"
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "date": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "time": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "venue": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "island": {
+                    "type": "string",
+                    "enum": [
+                      "oahu",
+                      "maui",
+                      "big_island",
+                      "kauai"
+                    ]
+                  },
+                  "price": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "ticket_url": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "date",
+                  "time",
+                  "venue",
+                  "island",
+                  "price",
+                  "ticket_url"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "meta": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cached": {
+                  "type": "boolean"
+                },
+                "source_diversity": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "empty_result"
+            },
+            "tool": {
+              "$ref": "#/definitions/SearchHawaiiEventsResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/SearchHawaiiEventsResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/SearchHawaiiEventsResponse/anyOf/0/properties/query"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SearchHawaiiEventsResponse/anyOf/0/properties/results/items"
+              },
+              "minItems": 0,
+              "maxItems": 0
+            },
+            "meta": {
+              "$ref": "#/definitions/SearchHawaiiEventsResponse/anyOf/0/properties/meta"
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "kind": {
+              "type": "string",
+              "const": "error"
+            },
+            "tool": {
+              "$ref": "#/definitions/SearchHawaiiEventsResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/SearchHawaiiEventsResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/SearchHawaiiEventsResponse/anyOf/0/properties/query"
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "db_not_configured",
+                    "db_query_failed",
+                    "not_enough_data",
+                    "external_api_failed",
+                    "rate_limited",
+                    "daily_quota_exceeded",
+                    "invalid_arguments"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "FindHawaiiRestaurantsResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "result"
+            },
+            "tool": {
+              "type": "string",
+              "const": "find_hawaii_restaurants"
+            },
+            "protocol": {
+              "type": "string",
+              "const": "aaak/0.1"
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "neighborhood": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 140
+                  },
+                  "rating": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 5
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "review_count": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "price_level": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "website": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "phone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "island": {
+                    "type": "string",
+                    "const": "oahu"
+                  }
+                },
+                "required": [
+                  "name",
+                  "category",
+                  "neighborhood",
+                  "description",
+                  "rating",
+                  "review_count",
+                  "price_level",
+                  "website",
+                  "phone",
+                  "island"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "meta": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cached": {
+                  "type": "boolean"
+                },
+                "source_diversity": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "empty_result"
+            },
+            "tool": {
+              "$ref": "#/definitions/FindHawaiiRestaurantsResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/FindHawaiiRestaurantsResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/FindHawaiiRestaurantsResponse/anyOf/0/properties/query"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/FindHawaiiRestaurantsResponse/anyOf/0/properties/results/items"
+              },
+              "minItems": 0,
+              "maxItems": 0
+            },
+            "meta": {
+              "$ref": "#/definitions/FindHawaiiRestaurantsResponse/anyOf/0/properties/meta"
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "kind": {
+              "type": "string",
+              "const": "error"
+            },
+            "tool": {
+              "$ref": "#/definitions/FindHawaiiRestaurantsResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/FindHawaiiRestaurantsResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/FindHawaiiRestaurantsResponse/anyOf/0/properties/query"
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "db_not_configured",
+                    "db_query_failed",
+                    "not_enough_data",
+                    "external_api_failed",
+                    "rate_limited",
+                    "daily_quota_exceeded",
+                    "invalid_arguments"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PlanHawaiiDayResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "result"
+            },
+            "tool": {
+              "type": "string",
+              "const": "plan_hawaii_day"
+            },
+            "protocol": {
+              "type": "string",
+              "const": "aaak/0.1"
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "island": {
+                    "type": "string",
+                    "enum": [
+                      "oahu",
+                      "maui",
+                      "big_island",
+                      "kauai"
+                    ]
+                  },
+                  "island_label": {
+                    "type": "string"
+                  },
+                  "vibe": {
+                    "type": "string",
+                    "enum": [
+                      "adventure",
+                      "chill",
+                      "cultural",
+                      "romantic",
+                      "family",
+                      "budget"
+                    ]
+                  },
+                  "budget_per_person_dollars": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "sections": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "slot": {
+                              "type": "string",
+                              "enum": [
+                                "morning",
+                                "lunch",
+                                "afternoon",
+                                "dinner"
+                              ]
+                            },
+                            "type": {
+                              "type": "string",
+                              "const": "experience"
+                            },
+                            "item": {
+                              "type": "object",
+                              "properties": {
+                                "title": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "source": {
+                                  "type": "string",
+                                  "enum": [
+                                    "viator",
+                                    "gyg",
+                                    "klook",
+                                    "groupon"
+                                  ]
+                                },
+                                "island": {
+                                  "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/results/items/properties/island"
+                                },
+                                "area": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "category": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "price_cents": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "rating": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 5
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "review_count": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "description": {
+                                  "type": "string",
+                                  "maxLength": 140
+                                },
+                                "booking_url": {
+                                  "type": "string",
+                                  "format": "uri"
+                                },
+                                "is_deal": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "title",
+                                "source",
+                                "island",
+                                "area",
+                                "category",
+                                "price_cents",
+                                "rating",
+                                "review_count",
+                                "description",
+                                "booking_url",
+                                "is_deal"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "slot",
+                            "type",
+                            "item"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "slot": {
+                              "type": "string",
+                              "enum": [
+                                "morning",
+                                "lunch",
+                                "afternoon",
+                                "dinner"
+                              ]
+                            },
+                            "type": {
+                              "type": "string",
+                              "const": "restaurant"
+                            },
+                            "item": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "category": {
+                                  "type": "string"
+                                },
+                                "neighborhood": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "description": {
+                                  "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/results/items/properties/sections/items/anyOf/0/properties/item/properties/description"
+                                },
+                                "rating": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 5
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "review_count": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "price_level": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "website": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "uri"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "phone": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "island": {
+                                  "type": "string",
+                                  "const": "oahu"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "category",
+                                "neighborhood",
+                                "description",
+                                "rating",
+                                "review_count",
+                                "price_level",
+                                "website",
+                                "phone",
+                                "island"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "slot",
+                            "type",
+                            "item"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "slot": {
+                              "type": "string",
+                              "enum": [
+                                "morning",
+                                "lunch",
+                                "afternoon",
+                                "dinner"
+                              ]
+                            },
+                            "type": {
+                              "type": "string",
+                              "const": "fallback"
+                            },
+                            "item": {
+                              "type": "object",
+                              "properties": {
+                                "fallback_reason": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "fallback_reason"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "slot",
+                            "type",
+                            "item"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "island",
+                  "island_label",
+                  "vibe",
+                  "budget_per_person_dollars",
+                  "sections"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "meta": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cached": {
+                  "type": "boolean"
+                },
+                "source_diversity": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "empty_result"
+            },
+            "tool": {
+              "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/query"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/results/items"
+              },
+              "minItems": 0,
+              "maxItems": 0
+            },
+            "meta": {
+              "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/meta"
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "kind": {
+              "type": "string",
+              "const": "error"
+            },
+            "tool": {
+              "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/PlanHawaiiDayResponse/anyOf/0/properties/query"
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "db_not_configured",
+                    "db_query_failed",
+                    "not_enough_data",
+                    "external_api_failed",
+                    "rate_limited",
+                    "daily_quota_exceeded",
+                    "invalid_arguments"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "GetHawaiiWeatherResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "result"
+            },
+            "tool": {
+              "type": "string",
+              "const": "get_hawaii_weather"
+            },
+            "protocol": {
+              "type": "string",
+              "const": "aaak/0.1"
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "island": {
+                    "type": "string",
+                    "enum": [
+                      "oahu",
+                      "maui",
+                      "big_island",
+                      "kauai"
+                    ]
+                  },
+                  "island_label": {
+                    "type": "string"
+                  },
+                  "current": {
+                    "type": "object",
+                    "properties": {
+                      "temperature_f": {
+                        "type": "number"
+                      },
+                      "feels_like_f": {
+                        "type": "number"
+                      },
+                      "humidity_pct": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100
+                      },
+                      "uv_index": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "wind_mph": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "precipitation_in": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "temperature_f",
+                      "feels_like_f",
+                      "humidity_pct",
+                      "uv_index",
+                      "wind_mph",
+                      "precipitation_in"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "forecast": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        "temp_f_min": {
+                          "type": "number"
+                        },
+                        "temp_f_max": {
+                          "type": "number"
+                        },
+                        "precip_probability_pct": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "wind_mph_max": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "uv_index_max": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "temp_f_min",
+                        "temp_f_max",
+                        "precip_probability_pct",
+                        "wind_mph_max",
+                        "uv_index_max"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "island",
+                  "island_label",
+                  "current",
+                  "forecast"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "meta": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cached": {
+                  "type": "boolean"
+                },
+                "source_diversity": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "kind": {
+              "type": "string",
+              "const": "empty_result"
+            },
+            "tool": {
+              "$ref": "#/definitions/GetHawaiiWeatherResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/GetHawaiiWeatherResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/GetHawaiiWeatherResponse/anyOf/0/properties/query"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/GetHawaiiWeatherResponse/anyOf/0/properties/results/items"
+              },
+              "minItems": 0,
+              "maxItems": 0
+            },
+            "meta": {
+              "$ref": "#/definitions/GetHawaiiWeatherResponse/anyOf/0/properties/meta"
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "results",
+            "meta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "kind": {
+              "type": "string",
+              "const": "error"
+            },
+            "tool": {
+              "$ref": "#/definitions/GetHawaiiWeatherResponse/anyOf/0/properties/tool"
+            },
+            "protocol": {
+              "$ref": "#/definitions/GetHawaiiWeatherResponse/anyOf/0/properties/protocol"
+            },
+            "query": {
+              "$ref": "#/definitions/GetHawaiiWeatherResponse/anyOf/0/properties/query"
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "db_not_configured",
+                    "db_query_failed",
+                    "not_enough_data",
+                    "external_api_failed",
+                    "rate_limited",
+                    "daily_quota_exceeded",
+                    "invalid_arguments"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "ok",
+            "kind",
+            "tool",
+            "protocol",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

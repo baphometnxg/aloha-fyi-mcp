@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "kind": "result",
+  "tool": "get_hawaii_deals",
+  "protocol": "aaak/0.1",
+  "query": { "activity": "luau", "max_price_dollars": 100 },
+  "results": [
+    {
+      "title": "Magic of Polynesia — Discount Seating",
+      "source": "groupon",
+      "island": "oahu",
+      "area": "waikiki",
+      "category": "luau",
+      "price_cents": 4900,
+      "rating": 4.4,
+      "review_count": 812,
+      "description": "Polynesian dinner show in Waikiki, seated tier with discount admission.",
+      "booking_url": "https://aloha.fyi/r/qP9wL2vDx4",
+      "is_deal": true
+    }
+  ],
+  "meta": { "count": 1, "source_diversity": 1 }
+}

@@ -1,0 +1,11 @@
+{
+  "ok": false,
+  "kind": "error",
+  "tool": "search_hawaii_tours",
+  "protocol": "aaak/0.1",
+  "query": { "query": "snorkeling" },
+  "error": {
+    "code": "db_query_failed",
+    "message": "connection terminated unexpectedly"
+  }
+}

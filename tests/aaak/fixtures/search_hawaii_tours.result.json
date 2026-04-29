@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "kind": "result",
+  "tool": "search_hawaii_tours",
+  "protocol": "aaak/0.1",
+  "query": { "query": "snorkeling", "island": "oahu", "limit": 2 },
+  "results": [
+    {
+      "title": "Hanauma Bay Half-Day Snorkel",
+      "source": "viator",
+      "island": "oahu",
+      "area": "east_oahu",
+      "category": "tour",
+      "price_cents": 8900,
+      "rating": 4.7,
+      "review_count": 2341,
+      "description": "Guided snorkeling at Oahu's most famous reef. Includes gear and transport from Waikiki.",
+      "booking_url": "https://aloha.fyi/r/aB3kT9pQz1",
+      "is_deal": false
+    },
+    {
+      "title": "Turtle Canyon Snorkel Sail",
+      "source": "gyg",
+      "island": "oahu",
+      "area": "waikiki",
+      "category": "tour",
+      "price_cents": 11500,
+      "rating": 4.8,
+      "review_count": 1612,
+      "description": "Catamaran sail to a turtle cleaning station off Waikiki. Two hours, gear included.",
+      "booking_url": "https://aloha.fyi/r/zX1pK4nRm7",
+      "is_deal": false
+    }
+  ],
+  "meta": { "count": 2, "cached": false, "source_diversity": 2 }
+}

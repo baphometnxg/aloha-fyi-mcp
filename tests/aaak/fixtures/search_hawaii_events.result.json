@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "kind": "result",
+  "tool": "search_hawaii_events",
+  "protocol": "aaak/0.1",
+  "query": { "query": "live music", "island": "oahu", "days_ahead": 7 },
+  "results": [
+    {
+      "name": "Henry Kapono at Duke's",
+      "date": "2026-05-02",
+      "time": "4:00 PM",
+      "venue": "Duke's Waikiki",
+      "island": "oahu",
+      "price": "Free with dinner",
+      "ticket_url": null
+    },
+    {
+      "name": "Jack Johnson — Honolulu",
+      "date": "2026-05-04",
+      "time": "7:00 PM",
+      "venue": "Waikiki Shell",
+      "island": "oahu",
+      "price": "$45-$120",
+      "ticket_url": "https://aloha.fyi/r/eK7tY3pNb9"
+    }
+  ],
+  "meta": { "count": 2 }
+}

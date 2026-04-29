@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "kind": "result",
+  "tool": "search_hawaii_tours",
+  "protocol": "aaak/0.1",
+  "query": { "query": "snorkeling" },
+  "results": [
+    {
+      "title": "Bad Booking URL Tour",
+      "source": "viator",
+      "island": "oahu",
+      "area": null,
+      "category": null,
+      "price_cents": 8900,
+      "rating": null,
+      "review_count": null,
+      "description": "Has an unparseable booking URL — schema must reject this.",
+      "booking_url": "not-a-url",
+      "is_deal": false
+    }
+  ],
+  "meta": { "count": 1 }
+}

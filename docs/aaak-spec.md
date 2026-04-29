@@ -1,11 +1,17 @@
 ---
 title: AAAK — Agent-to-Agent Adaptive Knowledge
 version: 0.1
-status: draft
+status: a-001 in progress
 owner: Michael Crain
 target_repo: baphometnxg/aloha-fyi-mcp
 last_updated: 2026-04-29
 ---
+
+> **Decisions locked for A-001:** itinerary uses flat `sections[]` with tagged
+> union; weather has its own envelope without a `booking_url` invariant; text
+> fallback stays for v0.1 + v0.2; both `structuredContent` and JSON-in-text are
+> emitted in A-002 (so older clients keep working without a protocol bump);
+> restaurant `website` standardizes through `/r/{code}` in A-002.
 
 # AAAK v0.1 — Agent-to-Agent Adaptive Knowledge
 
