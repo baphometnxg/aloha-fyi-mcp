@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "kind": "empty_result",
+  "tool": "plan_hawaii_day",
+  "protocol": "aaak/0.1",
+  "query": { "island": "oahu", "vibe": "chill" },
+  "results": [
+    {
+      "island": "oahu",
+      "island_label": "Oʻahu",
+      "vibe": "chill",
+      "budget_per_person_dollars": 300,
+      "sections": []
+    }
+  ],
+  "meta": { "count": 0 }
+}

@@ -1,0 +1,11 @@
+{
+  "ok": false,
+  "kind": "error",
+  "tool": "plan_hawaii_day",
+  "protocol": "aaak/0.1",
+  "query": { "island": "kauai", "vibe": "adventure", "max_budget_per_person": 50 },
+  "error": {
+    "code": "not_enough_data",
+    "message": "Not enough adventure experiences on Kauai under $50 to build a day plan."
+  }
+}

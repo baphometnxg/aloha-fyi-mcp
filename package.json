@@ -9,7 +9,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/stdio.js",
-    "start:http": "node dist/http.js"
+    "start:http": "node dist/http.js",
+    "aaak:schema": "tsc && node dist/scripts/emit-aaak-schema.js",
+    "aaak:test": "tsc && node dist/tests/aaak/conform.js"
   },
   "keywords": [
     "mcp",
@@ -34,6 +36,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "zod-to-json-schema": "^3.25.2"
   }
 }

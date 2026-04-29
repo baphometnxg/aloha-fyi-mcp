@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "kind": "empty_result",
+  "tool": "search_hawaii_tours",
+  "protocol": "aaak/0.1",
+  "query": { "query": "ice fishing", "island": "oahu" },
+  "results": [],
+  "meta": { "count": 0 }
+}

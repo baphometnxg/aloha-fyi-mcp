@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "kind": "result",
+  "tool": "find_hawaii_restaurants",
+  "protocol": "aaak/0.1",
+  "query": { "query": "poke", "neighborhood": "waikiki", "limit": 1 },
+  "results": [
+    {
+      "name": "Ono Seafood",
+      "category": "poke",
+      "neighborhood": "Kapahulu",
+      "description": "Walk-up poke counter with day-boat ahi. Cash-friendly and quick.",
+      "rating": 4.7,
+      "review_count": 3104,
+      "price_level": "$",
+      "website": "https://aloha.fyi/r/oN1sFp2rA8",
+      "phone": "(808) 732-4806",
+      "island": "oahu"
+    }
+  ],
+  "meta": { "count": 1 }
+}

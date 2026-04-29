@@ -1,0 +1,73 @@
+{
+  "ok": true,
+  "kind": "result",
+  "tool": "plan_hawaii_day",
+  "protocol": "aaak/0.1",
+  "query": { "island": "oahu", "vibe": "chill", "max_budget_per_person": 300 },
+  "results": [
+    {
+      "island": "oahu",
+      "island_label": "Oʻahu",
+      "vibe": "chill",
+      "budget_per_person_dollars": 300,
+      "sections": [
+        {
+          "slot": "morning",
+          "type": "experience",
+          "item": {
+            "title": "Turtle Canyon Snorkel Sail",
+            "source": "gyg",
+            "island": "oahu",
+            "area": "waikiki",
+            "category": "tour",
+            "price_cents": 11500,
+            "rating": 4.8,
+            "review_count": 1612,
+            "description": "Catamaran sail to a turtle cleaning station off Waikiki. Two hours, gear included.",
+            "booking_url": "https://aloha.fyi/r/zX1pK4nRm7",
+            "is_deal": false
+          }
+        },
+        {
+          "slot": "lunch",
+          "type": "restaurant",
+          "item": {
+            "name": "Ono Seafood",
+            "category": "poke",
+            "neighborhood": "Kapahulu",
+            "description": "Walk-up poke counter with day-boat ahi. Cash-friendly and quick.",
+            "rating": 4.7,
+            "review_count": 3104,
+            "price_level": "$",
+            "website": "https://aloha.fyi/r/oN1sFp2rA8",
+            "phone": "(808) 732-4806",
+            "island": "oahu"
+          }
+        },
+        {
+          "slot": "afternoon",
+          "type": "experience",
+          "item": {
+            "title": "Diamond Head Sunset Hike",
+            "source": "viator",
+            "island": "oahu",
+            "area": "waikiki",
+            "category": "tour",
+            "price_cents": 4500,
+            "rating": 4.6,
+            "review_count": 980,
+            "description": "Guided sunset hike to Diamond Head crater rim with skyline views.",
+            "booking_url": "https://aloha.fyi/r/dH4xQ7vCm2",
+            "is_deal": false
+          }
+        },
+        {
+          "slot": "dinner",
+          "type": "fallback",
+          "item": { "fallback_reason": "no dinner restaurant matched filters; consumer should call find_hawaii_restaurants" }
+        }
+      ]
+    }
+  ],
+  "meta": { "count": 1 }
+}

@@ -1,0 +1,11 @@
+{
+  "ok": false,
+  "kind": "error",
+  "tool": "get_hawaii_weather",
+  "protocol": "aaak/0.1",
+  "query": { "island": "maui", "days": 3 },
+  "error": {
+    "code": "external_api_failed",
+    "message": "OpenMeteo 503"
+  }
+}
