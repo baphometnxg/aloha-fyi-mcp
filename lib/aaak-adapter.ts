@@ -35,9 +35,50 @@ import type {
 
 // ── Env gate ───────────────────────────────────────────────────────────────
 
+/**
+ * Global AAAK kill switch. When false, the adapter is fully dormant and
+ * the wire format is byte-equivalent to v1.0.0 regardless of any other
+ * AAAK_* env vars. Truthy values: `true`, `1`, `yes`, `on` (case-insensitive,
+ * trimmed).
+ */
 export function isAAAKEnabled(): boolean {
   const raw = (process.env.AAAK_ENABLED || "").toLowerCase().trim();
   return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
+}
+
+/**
+ * Parse AAAK_CLIENTS into an allowlist. Returns:
+ *   - null  → no allowlist set (all clients eligible)
+ *   - []    → set but empty (treated same as no allowlist for ergonomics —
+ *             prevents accidentally locking out everyone with `AAAK_CLIENTS=`)
+ *   - [...] → only listed clientName values are eligible
+ *
+ * Comma-separated, trimmed, lowercased. Match against `LogCtx.clientName`
+ * which is derived from User-Agent in http.ts (`claude-desktop`, `claude-code`,
+ * `chatgpt`, `cursor`, `mcp-inspector`, etc.).
+ */
+export function getAAAKAllowlist(): string[] | null {
+  const raw = process.env.AAAK_CLIENTS;
+  if (raw === undefined) return null;
+  const list = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return list.length === 0 ? null : list;
+}
+
+/**
+ * Resolves the AAAK gate for a specific incoming request. The global
+ * `AAAK_ENABLED` is the floor — if false, this always returns false.
+ * If true and an allowlist is set, the client must be on the list.
+ * If true and no allowlist is set, all clients are eligible.
+ */
+export function isAAAKEnabledForClient(clientName: string | null | undefined): boolean {
+  if (!isAAAKEnabled()) return false;
+  const allowlist = getAAAKAllowlist();
+  if (allowlist === null) return true;
+  if (!clientName) return false;
+  return allowlist.includes(clientName.toLowerCase());
 }
 
 // ── Telemetry stamp (A-003) ────────────────────────────────────────────────
@@ -245,19 +286,43 @@ export function buildErrorEnvelope(input: ErrorEnvelopeInput) {
 // ── CallToolResult assembly ────────────────────────────────────────────────
 
 interface MakeResultOpts {
+  /** Body text — always present in the response, in both modes. */
   text: string;
-  envelope: Record<string, unknown>;  // any of the three envelope shapes above
+  /**
+   * Optional marketing trailer (e.g. "_Powered by aloha.fyi_"). Appended to
+   * `text` when AAAK is OFF for this client; dropped when AAAK is ON. UTMs
+   * on the booking URL carry attribution either way.
+   */
+  trailer?: string;
+  /** AAAK envelope to attach as structuredContent when the gate is open. */
+  envelope: Record<string, unknown>;
+  /** Maps to CallToolResult.isError. */
   isError?: boolean;
+  /**
+   * Stable client identifier (from `LogCtx.clientName`). Used by the A-005
+   * per-client allowlist. Pass `null` or omit if the client is unidentified
+   * — they fall back to legacy mode whenever an allowlist is configured.
+   */
+  clientName?: string | null;
 }
 
 /**
  * Assemble the final CallToolResult and stamp the telemetry context.
- * `structuredContent` is attached only when AAAK_ENABLED is truthy.
+ *
+ * - `structuredContent` is attached when `isAAAKEnabledForClient(clientName)`
+ *   returns true — i.e. global AAAK_ENABLED=true AND (no AAAK_CLIENTS
+ *   allowlist set OR clientName is on it).
+ * - `text` is `body` alone in AAAK mode; `body\n\ntrailer` in legacy mode.
+ *   This is the A-004 trailer drop.
  */
 export function makeToolResult(opts: MakeResultOpts): { result: CallToolResult; stamp: AAAKLogStamp } {
-  const enabled = isAAAKEnabled();
+  const enabled = isAAAKEnabledForClient(opts.clientName ?? null);
+  const text =
+    !enabled && opts.trailer && opts.trailer.length > 0
+      ? `${opts.text}\n\n${opts.trailer}`
+      : opts.text;
   const result: CallToolResult = {
-    content: [{ type: "text", text: opts.text }],
+    content: [{ type: "text", text }],
   };
   if (opts.isError) result.isError = true;
   if (enabled) {

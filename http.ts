@@ -595,6 +595,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: "Database not configured. Visit https://aloha.fyi for Hawaii tours.",
           envelope: buildErrorEnvelope({ tool, code: "db_not_configured", message: "Database not configured", query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -643,6 +644,7 @@ function buildServer(ctx: LogCtx): McpServer {
           const { result, stamp } = makeToolResult({
             text: `No Hawaii tours found for "${query}". Try broader search terms or visit https://aloha.fyi for the full catalog.`,
             envelope: buildEmptyEnvelope({ tool, query: queryArgs }),
+            clientName: ctx.clientName,
           });
           stampAAAK(ctx, stamp);
           return result;
@@ -663,10 +665,12 @@ function buildServer(ctx: LogCtx): McpServer {
           })
         );
 
-        const text = `Found ${rows.length} Hawaii experiences:\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — Hawaii's AI concierge_`;
+        const text = `Found ${rows.length} Hawaii experiences:\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}`;
         const { result, stamp } = makeToolResult({
           text,
+          trailer: "_Powered by aloha.fyi — Hawaii's AI concierge_",
           envelope: buildResultEnvelope({ tool, rows: mapped.map((m) => m.aaak), query: queryArgs, cached: wasCached }),
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -676,6 +680,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: `Search error: ${err.message}`,
           envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -708,6 +713,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: "Database not configured. Visit https://aloha.fyi/experiences/deals for Hawaii deals.",
           envelope: buildErrorEnvelope({ tool, code: "db_not_configured", message: "Database not configured", query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -737,6 +743,7 @@ function buildServer(ctx: LogCtx): McpServer {
           const { result, stamp } = makeToolResult({
             text: `No deals found for "${activity}" under $${max_price_dollars}. Try a higher budget.`,
             envelope: buildEmptyEnvelope({ tool, query: queryArgs }),
+            clientName: ctx.clientName,
           });
           stampAAAK(ctx, stamp);
           return result;
@@ -756,10 +763,12 @@ function buildServer(ctx: LogCtx): McpServer {
           })
         );
 
-        const text = `Best Hawaii deals for "${activity}" (under $${max_price_dollars}):\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}\n\n_Powered by aloha.fyi_`;
+        const text = `Best Hawaii deals for "${activity}" (under $${max_price_dollars}):\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}`;
         const { result, stamp } = makeToolResult({
           text,
+          trailer: "_Powered by aloha.fyi_",
           envelope: buildResultEnvelope({ tool, rows: mapped.map((m) => m.aaak), query: queryArgs, cached: wasCached }),
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -769,6 +778,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: `Deals search error: ${err.message}`,
           envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -826,6 +836,7 @@ function buildServer(ctx: LogCtx): McpServer {
           const { result, stamp } = makeToolResult({
             text: `No events found matching "${query}" in the next ${days_ahead} days. Visit https://aloha.fyi for the full events calendar.`,
             envelope: buildEmptyEnvelope({ tool, query: queryArgs }),
+            clientName: ctx.clientName,
           });
           stampAAAK(ctx, stamp);
           return result;
@@ -857,10 +868,12 @@ function buildServer(ctx: LogCtx): McpServer {
           })
         );
 
-        const text = `Upcoming Hawaii events (next ${days_ahead} days):\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — 579+ events across 4 islands_`;
+        const text = `Upcoming Hawaii events (next ${days_ahead} days):\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}`;
         const { result, stamp } = makeToolResult({
           text,
+          trailer: "_Powered by aloha.fyi — 579+ events across 4 islands_",
           envelope: buildResultEnvelope({ tool, rows: mapped.map((m) => m.aaak), query: queryArgs }),
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -870,6 +883,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: `Events error: ${err.message}`,
           envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -905,6 +919,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: `Unknown island: ${island}`,
           envelope: buildErrorEnvelope({ tool, code: "invalid_arguments", message: `Unknown island: ${island}`, query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -931,6 +946,7 @@ function buildServer(ctx: LogCtx): McpServer {
             text: `Weather fetch failed for ${coords.label}: ${err.message}`,
             envelope: buildErrorEnvelope({ tool, code: "external_api_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
             isError: true,
+            clientName: ctx.clientName,
           });
           stampAAAK(ctx, stamp);
           return result;
@@ -962,13 +978,18 @@ function buildServer(ctx: LogCtx): McpServer {
         const wind = Math.round(daily.wind_speed_10m_max?.[i] ?? 0);
         lines.push(`- ${date}: ${lo}–${hi}°F, ${rain}% rain, ${wind} mph wind${uv}`);
       }
-      lines.push("");
-      lines.push("_Weather via Open-Meteo. Planning a trip? Ask Nani at https://aloha.fyi for personalized recommendations based on these conditions._");
+      // Trailer held separately so makeToolResult can drop it when AAAK is on.
+      // makeToolResult re-appends with `\n\n` in legacy mode — preserves today's
+      // output byte-equivalently to v1.0.0.
+      const weatherTrailer =
+        "_Weather via Open-Meteo. Planning a trip? Ask Nani at https://aloha.fyi for personalized recommendations based on these conditions._";
 
       const aaakWeather = mapWeather(island, coords.label, weather);
       const { result, stamp } = makeToolResult({
         text: lines.join("\n"),
+        trailer: weatherTrailer,
         envelope: buildResultEnvelope({ tool, rows: [aaakWeather], query: queryArgs, cached: wasCached }),
+        clientName: ctx.clientName,
       });
       stampAAAK(ctx, stamp);
       return result;
@@ -1019,6 +1040,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: "Database not configured.",
           envelope: buildErrorEnvelope({ tool, code: "db_not_configured", message: "Database not configured", query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -1071,6 +1093,7 @@ function buildServer(ctx: LogCtx): McpServer {
           const { result, stamp } = makeToolResult({
             text: `No restaurants found matching "${query || category}". Try a broader category or visit https://aloha.fyi/restaurants for the full directory.`,
             envelope: buildEmptyEnvelope({ tool, query: queryArgs }),
+            clientName: ctx.clientName,
           });
           stampAAAK(ctx, stamp);
           return result;
@@ -1107,10 +1130,12 @@ function buildServer(ctx: LogCtx): McpServer {
           })
         );
 
-        const text = `Found ${rows.length} Hawaii food spots:\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — 540+ curated food spots across Oahu_`;
+        const text = `Found ${rows.length} Hawaii food spots:\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}`;
         const { result, stamp } = makeToolResult({
           text,
+          trailer: "_Powered by aloha.fyi — 540+ curated food spots across Oahu_",
           envelope: buildResultEnvelope({ tool, rows: mapped.map((m) => m.aaak), query: queryArgs, cached: wasCached }),
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -1120,6 +1145,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: `Restaurant search error: ${err.message}`,
           envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -1162,6 +1188,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: "Database not configured.",
           envelope: buildErrorEnvelope({ tool, code: "db_not_configured", message: "Database not configured", query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -1209,6 +1236,7 @@ function buildServer(ctx: LogCtx): McpServer {
           const { result, stamp } = makeToolResult({
             text: msg,
             envelope: buildErrorEnvelope({ tool, code: "not_enough_data", message: msg, query: queryArgs }),
+            clientName: ctx.clientName,
           });
           stampAAAK(ctx, stamp);
           return result;
@@ -1285,14 +1313,16 @@ function buildServer(ctx: LogCtx): McpServer {
         ]);
 
         const islandLabel = ISLAND_COORDS[island]?.label || island;
+        // Body is built without the trailer; makeToolResult re-appends it
+        // (joined by "\n\n") in legacy mode and drops it in AAAK mode.
         const text = [
           `# ${islandLabel} — ${vibe.charAt(0).toUpperCase() + vibe.slice(1)} Day Plan`,
           `Budget: $${max_budget_per_person}/person`,
           "",
           ...sections.map((s) => s.line),
-          "",
-          "_For a custom itinerary with booking help, chat with Nani at https://aloha.fyi — she speaks 5 languages and knows every spot on this list._",
         ].join("\n\n");
+        const planTrailer =
+          "_For a custom itinerary with booking help, chat with Nani at https://aloha.fyi — she speaks 5 languages and knows every spot on this list._";
 
         ctx.rowCount = 4;
         const itinerary = {
@@ -1304,7 +1334,9 @@ function buildServer(ctx: LogCtx): McpServer {
         };
         const { result, stamp } = makeToolResult({
           text,
+          trailer: planTrailer,
           envelope: buildResultEnvelope({ tool, rows: [itinerary], query: queryArgs, cached: wasCached }),
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;
@@ -1314,6 +1346,7 @@ function buildServer(ctx: LogCtx): McpServer {
           text: `Planner error: ${err.message}`,
           envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
           isError: true,
+          clientName: ctx.clientName,
         });
         stampAAAK(ctx, stamp);
         return result;

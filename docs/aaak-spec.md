@@ -7,7 +7,7 @@ target_repo: baphometnxg/aloha-fyi-mcp
 last_updated: 2026-04-29
 ---
 
-> **Decisions locked through A-003:**
+> **Decisions locked through A-005:**
 > - itinerary uses flat `sections[]` with tagged union;
 > - weather has its own envelope without a `booking_url` invariant;
 > - text fallback stays for v0.1 + v0.2;
@@ -19,6 +19,16 @@ last_updated: 2026-04-29
 >   read `structuredContent` natively. Revisit only if a real downstream
 >   agent surfaces a hard requirement we don't currently have evidence for.
 > - restaurant `website` standardizes through `/r/{code}` in A-002.
+> - **A-004: drop the marketing trailer when AAAK is on.** UTMs on the
+>   booking URL already carry attribution. Modern consumer agents either
+>   read `structuredContent` and ignore text, or read text but transform /
+>   summarize it before surfacing to humans — the trailer is token waste in
+>   either case. When AAAK is off, the trailer is preserved exactly as today.
+> - **A-005: per-client allowlist via `AAAK_CLIENTS`.** Comma-separated list
+>   of `clientName` values (`claude-desktop`, `claude-code`, etc.). Unset or
+>   empty → all clients eligible (assuming `AAAK_ENABLED=true`). Set →
+>   AAAK on for listed clients only, legacy mode for everyone else. The
+>   global `AAAK_ENABLED` is the kill switch and always wins.
 
 # AAAK v0.1 — Agent-to-Agent Adaptive Knowledge
 
