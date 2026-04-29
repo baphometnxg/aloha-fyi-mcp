@@ -31,6 +31,25 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
+// AAAK adapter (A-002 / A-003) — wraps tool results into typed envelopes
+// and stamps response telemetry. See lib/aaak-adapter.ts.
+import {
+  type AAAKLogStamp,
+  buildResultEnvelope,
+  buildEmptyEnvelope,
+  buildErrorEnvelope,
+  experienceSection,
+  fallbackSection,
+  inferIsland,
+  isAAAKEnabled,
+  makeToolResult,
+  mapEvent,
+  mapExperience,
+  mapRestaurant,
+  mapWeather,
+  restaurantSection,
+} from "./lib/aaak-adapter.js";
+
 // ── Database ──
 const DB_URL = process.env.DATABASE_URL || "";
 const pool = DB_URL
@@ -90,6 +109,13 @@ async function ensureSchema() {
       );
       CREATE INDEX IF NOT EXISTS idx_mcp_clicks_code    ON mcp_clicks(code, clicked_at DESC);
       CREATE INDEX IF NOT EXISTS idx_mcp_clicks_clicked ON mcp_clicks(clicked_at DESC);
+
+      -- A-003: AAAK telemetry columns. Idempotent; safe to re-run.
+      ALTER TABLE mcp_requests ADD COLUMN IF NOT EXISTS response_mode TEXT;
+      ALTER TABLE mcp_requests ADD COLUMN IF NOT EXISTS response_bytes INT;
+      ALTER TABLE mcp_requests ADD COLUMN IF NOT EXISTS structured_present BOOLEAN;
+      CREATE INDEX IF NOT EXISTS idx_mcp_requests_resp_mode
+        ON mcp_requests(response_mode, created_at DESC) WHERE response_mode IS NOT NULL;
     `);
     console.log("[aloha-fyi-mcp] schema ensured: mcp_requests, mcp_click_targets, mcp_clicks");
   } catch (err: any) {
@@ -436,6 +462,10 @@ interface LogCtx {
   rowCount: number | null;
   error: string | null;
   startedAt: number;
+  // A-003: AAAK telemetry. Stamped by adapter via stampAAAK().
+  responseMode: "legacy" | "aaak" | null;
+  responseBytes: number | null;
+  structuredPresent: boolean | null;
 }
 
 function newLogCtx(): LogCtx {
@@ -453,7 +483,17 @@ function newLogCtx(): LogCtx {
     rowCount: null,
     error: null,
     startedAt: Date.now(),
+    responseMode: null,
+    responseBytes: null,
+    structuredPresent: null,
   };
+}
+
+/** Apply an AAAKLogStamp from the adapter onto the request log context. */
+function stampAAAK(ctx: LogCtx, stamp: AAAKLogStamp): void {
+  ctx.responseMode = stamp.responseMode;
+  ctx.responseBytes = stamp.responseBytes;
+  ctx.structuredPresent = stamp.structuredPresent;
 }
 
 /** Parse a JSON-RPC request body (object or array for batches) into log context */
@@ -488,8 +528,8 @@ async function writeLog(ctx: LogCtx): Promise<void> {
   try {
     await pool.query(
       `INSERT INTO mcp_requests
-        (method, tool_name, client_name, client_version, user_agent, ip_hash, params_hash, query_text, status_code, latency_ms, row_count, error)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        (method, tool_name, client_name, client_version, user_agent, ip_hash, params_hash, query_text, status_code, latency_ms, row_count, error, response_mode, response_bytes, structured_present)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [
         ctx.method,
         ctx.toolName,
@@ -503,6 +543,9 @@ async function writeLog(ctx: LogCtx): Promise<void> {
         ctx.latencyMs,
         ctx.rowCount,
         ctx.error,
+        ctx.responseMode,
+        ctx.responseBytes,
+        ctx.structuredPresent,
       ]
     );
   } catch (err: any) {
@@ -543,12 +586,18 @@ function buildServer(ctx: LogCtx): McpServer {
     async ({ query, island, max_price_dollars, source, limit }): Promise<CallToolResult> => {
       ctx.toolName = "search_hawaii_tours";
       ctx.queryText = (query || "").slice(0, 500);
+      const queryArgs = { query, island, max_price_dollars, source, limit };
+      const tool = "search_hawaii_tours" as const;
+
       if (!pool) {
         ctx.error = "db_not_configured";
-        return {
-          content: [{ type: "text", text: "Database not configured. Visit https://aloha.fyi for Hawaii tours." }],
+        const { result, stamp } = makeToolResult({
+          text: "Database not configured. Visit https://aloha.fyi for Hawaii tours.",
+          envelope: buildErrorEnvelope({ tool, code: "db_not_configured", message: "Database not configured", query: queryArgs }),
           isError: true,
-        };
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
       const lim = Math.min(20, Math.max(1, limit));
       const conditions = ["e.active = true"];
@@ -582,6 +631,7 @@ function buildServer(ctx: LogCtx): McpServer {
         `;
         const cacheKey = `tours:${JSON.stringify({ query, island, max_price_dollars, source, lim })}`;
         let rows = cacheGet(cacheKey);
+        const wasCached = rows !== null;
         if (!rows) {
           const result = await pool.query(sql, params);
           rows = result.rows;
@@ -590,18 +640,16 @@ function buildServer(ctx: LogCtx): McpServer {
         ctx.rowCount = rows.length;
 
         if (rows.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No Hawaii tours found for "${query}". Try broader search terms or visit https://aloha.fyi for the full catalog.`,
-              },
-            ],
-          };
+          const { result, stamp } = makeToolResult({
+            text: `No Hawaii tours found for "${query}". Try broader search terms or visit https://aloha.fyi for the full catalog.`,
+            envelope: buildEmptyEnvelope({ tool, query: queryArgs }),
+          });
+          stampAAAK(ctx, stamp);
+          return result;
         }
 
         const tag = ctx.clientName || "unknown";
-        const lines = await Promise.all(
+        const mapped = await Promise.all(
           rows.map(async (r: any) => {
             const price = r.price_cents ? `$${(r.price_cents / 100).toFixed(0)}` : "See link";
             const src = sourceLabel(r.source);
@@ -609,15 +657,28 @@ function buildServer(ctx: LogCtx): McpServer {
             const url = await registerClickTarget(affUrl, r.source, "search_hawaii_tours", tag);
             const rating = r.rating ? ` ★${r.rating}` : "";
             const reviews = r.review_count ? ` (${r.review_count} reviews)` : "";
-            return `**${r.title}** (via ${src})\n${r.area || "Oahu"} | ${price}/person${rating}${reviews}\n${r.description?.slice(0, 150) || ""}\nBook: ${url}`;
+            const line = `**${r.title}** (via ${src})\n${r.area || "Oahu"} | ${price}/person${rating}${reviews}\n${r.description?.slice(0, 150) || ""}\nBook: ${url}`;
+            const aaak = mapExperience(r, url, island);
+            return { line, aaak };
           })
         );
 
-        const text = `Found ${rows.length} Hawaii experiences:\n\n${lines.join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — Hawaii's AI concierge_`;
-        return { content: [{ type: "text", text }] };
+        const text = `Found ${rows.length} Hawaii experiences:\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — Hawaii's AI concierge_`;
+        const { result, stamp } = makeToolResult({
+          text,
+          envelope: buildResultEnvelope({ tool, rows: mapped.map((m) => m.aaak), query: queryArgs, cached: wasCached }),
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       } catch (err: any) {
         ctx.error = String(err?.message || err).slice(0, 500);
-        return { content: [{ type: "text", text: `Search error: ${err.message}` }], isError: true };
+        const { result, stamp } = makeToolResult({
+          text: `Search error: ${err.message}`,
+          envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
+          isError: true,
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
     }
   );
@@ -638,14 +699,18 @@ function buildServer(ctx: LogCtx): McpServer {
     async ({ activity, max_price_dollars, limit }): Promise<CallToolResult> => {
       ctx.toolName = "get_hawaii_deals";
       ctx.queryText = (activity || "").slice(0, 500);
+      const queryArgs = { activity, max_price_dollars, limit };
+      const tool = "get_hawaii_deals" as const;
+
       if (!pool) {
         ctx.error = "db_not_configured";
-        return {
-          content: [
-            { type: "text", text: "Database not configured. Visit https://aloha.fyi/experiences/deals for Hawaii deals." },
-          ],
+        const { result, stamp } = makeToolResult({
+          text: "Database not configured. Visit https://aloha.fyi/experiences/deals for Hawaii deals.",
+          envelope: buildErrorEnvelope({ tool, code: "db_not_configured", message: "Database not configured", query: queryArgs }),
           isError: true,
-        };
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
       const lim = Math.min(20, Math.max(1, limit));
       try {
@@ -660,6 +725,7 @@ function buildServer(ctx: LogCtx): McpServer {
         const params = activity ? [max_price_dollars * 100, lim, `%${activity}%`] : [max_price_dollars * 100, lim];
         const cacheKey = `deals:${JSON.stringify({ activity, max_price_dollars, lim })}`;
         let rows = cacheGet(cacheKey);
+        const wasCached = rows !== null;
         if (!rows) {
           const result = await pool.query(sql, params);
           rows = result.rows;
@@ -668,33 +734,44 @@ function buildServer(ctx: LogCtx): McpServer {
         ctx.rowCount = rows.length;
 
         if (rows.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No deals found for "${activity}" under $${max_price_dollars}. Try a higher budget.`,
-              },
-            ],
-          };
+          const { result, stamp } = makeToolResult({
+            text: `No deals found for "${activity}" under $${max_price_dollars}. Try a higher budget.`,
+            envelope: buildEmptyEnvelope({ tool, query: queryArgs }),
+          });
+          stampAAAK(ctx, stamp);
+          return result;
         }
 
         const tag = ctx.clientName || "unknown";
-        const lines = await Promise.all(
+        const mapped = await Promise.all(
           rows.map(async (r: any) => {
             const price = `$${(r.price_cents / 100).toFixed(0)}`;
             const src = sourceLabel(r.source);
             const affUrl = buildAffiliateUrl(r.source, r.affiliate_url, tag);
             const url = await registerClickTarget(affUrl, r.source, "get_hawaii_deals", tag);
             const savings = r.source === "groupon" ? " 🏷️ DEAL" : "";
-            return `**${r.title}** (via ${src})${savings}\n${r.area || "Oahu"} | ${price}/person\nBook: ${url}`;
+            const line = `**${r.title}** (via ${src})${savings}\n${r.area || "Oahu"} | ${price}/person\nBook: ${url}`;
+            const aaak = mapExperience(r, url);
+            return { line, aaak };
           })
         );
 
-        const text = `Best Hawaii deals for "${activity}" (under $${max_price_dollars}):\n\n${lines.join("\n\n---\n\n")}\n\n_Powered by aloha.fyi_`;
-        return { content: [{ type: "text", text }] };
+        const text = `Best Hawaii deals for "${activity}" (under $${max_price_dollars}):\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}\n\n_Powered by aloha.fyi_`;
+        const { result, stamp } = makeToolResult({
+          text,
+          envelope: buildResultEnvelope({ tool, rows: mapped.map((m) => m.aaak), query: queryArgs, cached: wasCached }),
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       } catch (err: any) {
         ctx.error = String(err?.message || err).slice(0, 500);
-        return { content: [{ type: "text", text: `Deals search error: ${err.message}` }], isError: true };
+        const { result, stamp } = makeToolResult({
+          text: `Deals search error: ${err.message}`,
+          envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
+          isError: true,
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
     }
   );
@@ -715,6 +792,9 @@ function buildServer(ctx: LogCtx): McpServer {
     async ({ query, island, days_ahead }): Promise<CallToolResult> => {
       ctx.toolName = "search_hawaii_events";
       ctx.queryText = (query || "").slice(0, 500);
+      const queryArgs = { query, island, days_ahead };
+      const tool = "search_hawaii_events" as const;
+
       try {
         const eventsPath = path.resolve(__dirname, "..", "data", "hawaii-events.json");
         let events: any[] = [];
@@ -743,18 +823,16 @@ function buildServer(ctx: LogCtx): McpServer {
         ctx.rowCount = filtered.length;
 
         if (filtered.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No events found matching "${query}" in the next ${days_ahead} days. Visit https://aloha.fyi for the full events calendar.`,
-              },
-            ],
-          };
+          const { result, stamp } = makeToolResult({
+            text: `No events found matching "${query}" in the next ${days_ahead} days. Visit https://aloha.fyi for the full events calendar.`,
+            envelope: buildEmptyEnvelope({ tool, query: queryArgs }),
+          });
+          stampAAAK(ctx, stamp);
+          return result;
         }
 
         const tag = ctx.clientName || "unknown";
-        const lines = await Promise.all(
+        const mapped = await Promise.all(
           filtered.map(async (e: any) => {
             const date = e.date
               ? new Date(e.date + "T00:00:00").toLocaleDateString("en-US", {
@@ -773,15 +851,28 @@ function buildServer(ctx: LogCtx): McpServer {
               tracked = addQueryParam(tracked, "utm_campaign", `mcp-${sanitizeClientTag(tag)}`);
               url = await registerClickTarget(tracked, "events", "search_hawaii_events", tag);
             }
-            return `**${e.name}** — ${date} ${e.time || ""}\n${venue || ""} | ${e.island || "oahu"} | ${price}${url ? `\n${url}` : ""}`;
+            const line = `**${e.name}** — ${date} ${e.time || ""}\n${venue || ""} | ${e.island || "oahu"} | ${price}${url ? `\n${url}` : ""}`;
+            const aaak = mapEvent(e, url || null);
+            return { line, aaak };
           })
         );
 
-        const text = `Upcoming Hawaii events (next ${days_ahead} days):\n\n${lines.join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — 579+ events across 4 islands_`;
-        return { content: [{ type: "text", text }] };
+        const text = `Upcoming Hawaii events (next ${days_ahead} days):\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — 579+ events across 4 islands_`;
+        const { result, stamp } = makeToolResult({
+          text,
+          envelope: buildResultEnvelope({ tool, rows: mapped.map((m) => m.aaak), query: queryArgs }),
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       } catch (err: any) {
         ctx.error = String(err?.message || err).slice(0, 500);
-        return { content: [{ type: "text", text: `Events error: ${err.message}` }], isError: true };
+        const { result, stamp } = makeToolResult({
+          text: `Events error: ${err.message}`,
+          envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
+          isError: true,
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
     }
   );
@@ -805,13 +896,23 @@ function buildServer(ctx: LogCtx): McpServer {
     async ({ island, days }): Promise<CallToolResult> => {
       ctx.toolName = "get_hawaii_weather";
       ctx.queryText = island;
+      const queryArgs = { island, days };
+      const tool = "get_hawaii_weather" as const;
+
       const coords = ISLAND_COORDS[island];
       if (!coords) {
-        return { content: [{ type: "text", text: `Unknown island: ${island}` }], isError: true };
+        const { result, stamp } = makeToolResult({
+          text: `Unknown island: ${island}`,
+          envelope: buildErrorEnvelope({ tool, code: "invalid_arguments", message: `Unknown island: ${island}`, query: queryArgs }),
+          isError: true,
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
       const d = Math.min(7, Math.max(1, days || 3));
       const cacheKey = `weather:${island}:${d}`;
       let weather = cacheGet(cacheKey) as any;
+      const wasCached = weather !== null;
       if (!weather) {
         try {
           const url =
@@ -826,12 +927,13 @@ function buildServer(ctx: LogCtx): McpServer {
           cacheSet(cacheKey, [weather] as any);
         } catch (err: any) {
           ctx.error = String(err?.message || err).slice(0, 500);
-          return {
-            content: [
-              { type: "text", text: `Weather fetch failed for ${coords.label}: ${err.message}` },
-            ],
+          const { result, stamp } = makeToolResult({
+            text: `Weather fetch failed for ${coords.label}: ${err.message}`,
+            envelope: buildErrorEnvelope({ tool, code: "external_api_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
             isError: true,
-          };
+          });
+          stampAAAK(ctx, stamp);
+          return result;
         }
       } else {
         weather = (weather as any[])[0];
@@ -862,7 +964,14 @@ function buildServer(ctx: LogCtx): McpServer {
       }
       lines.push("");
       lines.push("_Weather via Open-Meteo. Planning a trip? Ask Nani at https://aloha.fyi for personalized recommendations based on these conditions._");
-      return { content: [{ type: "text", text: lines.join("\n") }] };
+
+      const aaakWeather = mapWeather(island, coords.label, weather);
+      const { result, stamp } = makeToolResult({
+        text: lines.join("\n"),
+        envelope: buildResultEnvelope({ tool, rows: [aaakWeather], query: queryArgs, cached: wasCached }),
+      });
+      stampAAAK(ctx, stamp);
+      return result;
     }
   );
 
@@ -902,8 +1011,17 @@ function buildServer(ctx: LogCtx): McpServer {
     async ({ query, category, neighborhood, limit }): Promise<CallToolResult> => {
       ctx.toolName = "find_hawaii_restaurants";
       ctx.queryText = (query || category || neighborhood || "").slice(0, 500);
+      const queryArgs = { query, category, neighborhood, limit };
+      const tool = "find_hawaii_restaurants" as const;
+
       if (!pool) {
-        return { content: [{ type: "text", text: "Database not configured." }], isError: true };
+        const { result, stamp } = makeToolResult({
+          text: "Database not configured.",
+          envelope: buildErrorEnvelope({ tool, code: "db_not_configured", message: "Database not configured", query: queryArgs }),
+          isError: true,
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
       const lim = Math.min(15, Math.max(1, limit));
       const conds: string[] = [];
@@ -941,6 +1059,7 @@ function buildServer(ctx: LogCtx): McpServer {
         `;
         const cacheKey = `restaurants:${JSON.stringify({ query, category, neighborhood, lim })}`;
         let rows = cacheGet(cacheKey);
+        const wasCached = rows !== null;
         if (!rows) {
           const result = await pool.query(sql, params);
           rows = result.rows;
@@ -949,18 +1068,16 @@ function buildServer(ctx: LogCtx): McpServer {
         ctx.rowCount = rows.length;
 
         if (rows.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No restaurants found matching "${query || category}". Try a broader category or visit https://aloha.fyi/restaurants for the full directory.`,
-              },
-            ],
-          };
+          const { result, stamp } = makeToolResult({
+            text: `No restaurants found matching "${query || category}". Try a broader category or visit https://aloha.fyi/restaurants for the full directory.`,
+            envelope: buildEmptyEnvelope({ tool, query: queryArgs }),
+          });
+          stampAAAK(ctx, stamp);
+          return result;
         }
 
         const tag = ctx.clientName || "unknown";
-        const lines = await Promise.all(
+        const mapped = await Promise.all(
           rows.map(async (r: any) => {
             const rating = r.rating ? `★${r.rating}` : "";
             const reviews = r.review_count ? ` (${r.review_count} reviews)` : "";
@@ -969,6 +1086,7 @@ function buildServer(ctx: LogCtx): McpServer {
             const cat = r.category ? ` [${r.category}]` : "";
             const desc = r.description ? `\n${r.description.slice(0, 140)}` : "";
             let websiteLine = "";
+            let trackedUrl: string | null = null;
             if (r.website) {
               const tracked = addQueryParam(
                 addQueryParam(
@@ -979,19 +1097,32 @@ function buildServer(ctx: LogCtx): McpServer {
                 "utm_campaign",
                 `mcp-${sanitizeClientTag(tag)}`
               );
-              const trackedUrl = await registerClickTarget(tracked, "restaurant", "find_hawaii_restaurants", tag);
+              trackedUrl = await registerClickTarget(tracked, "restaurant", "find_hawaii_restaurants", tag);
               websiteLine = `\n${trackedUrl}`;
             }
             const phoneLine = r.phone ? `\n${r.phone}` : "";
-            return `**${r.name}**${cat}${nbh} ${rating}${reviews}${price}${desc}${websiteLine}${phoneLine}`;
+            const line = `**${r.name}**${cat}${nbh} ${rating}${reviews}${price}${desc}${websiteLine}${phoneLine}`;
+            const aaak = mapRestaurant(r, trackedUrl);
+            return { line, aaak };
           })
         );
 
-        const text = `Found ${rows.length} Hawaii food spots:\n\n${lines.join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — 540+ curated food spots across Oahu_`;
-        return { content: [{ type: "text", text }] };
+        const text = `Found ${rows.length} Hawaii food spots:\n\n${mapped.map((m) => m.line).join("\n\n---\n\n")}\n\n_Powered by aloha.fyi — 540+ curated food spots across Oahu_`;
+        const { result, stamp } = makeToolResult({
+          text,
+          envelope: buildResultEnvelope({ tool, rows: mapped.map((m) => m.aaak), query: queryArgs, cached: wasCached }),
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       } catch (err: any) {
         ctx.error = String(err?.message || err).slice(0, 500);
-        return { content: [{ type: "text", text: `Restaurant search error: ${err.message}` }], isError: true };
+        const { result, stamp } = makeToolResult({
+          text: `Restaurant search error: ${err.message}`,
+          envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
+          isError: true,
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
     }
   );
@@ -1023,8 +1154,17 @@ function buildServer(ctx: LogCtx): McpServer {
     async ({ island, vibe, max_budget_per_person }): Promise<CallToolResult> => {
       ctx.toolName = "plan_hawaii_day";
       ctx.queryText = `${island}/${vibe}`;
+      const queryArgs = { island, vibe, max_budget_per_person };
+      const tool = "plan_hawaii_day" as const;
+
       if (!pool) {
-        return { content: [{ type: "text", text: "Database not configured." }], isError: true };
+        const { result, stamp } = makeToolResult({
+          text: "Database not configured.",
+          envelope: buildErrorEnvelope({ tool, code: "db_not_configured", message: "Database not configured", query: queryArgs }),
+          isError: true,
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
 
       // Vibe → keyword map for picking relevant activities
@@ -1057,6 +1197,7 @@ function buildServer(ctx: LogCtx): McpServer {
         `;
         const cacheKey = `plan:${island}:${vibe}:${max_budget_per_person}`;
         let rows = cacheGet(cacheKey);
+        const wasCached = rows !== null;
         if (!rows) {
           const result = await pool.query(sql, params);
           rows = result.rows;
@@ -1064,14 +1205,13 @@ function buildServer(ctx: LogCtx): McpServer {
         }
 
         if (rows.length < 2) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Not enough experiences found for a ${vibe} day on ${island} under $${max_budget_per_person}. Try a higher budget or different vibe, or chat with Nani at https://aloha.fyi for a custom plan.`,
-              },
-            ],
-          };
+          const msg = `Not enough experiences found for a ${vibe} day on ${island} under $${max_budget_per_person}. Try a higher budget or different vibe, or chat with Nani at https://aloha.fyi for a custom plan.`;
+          const { result, stamp } = makeToolResult({
+            text: msg,
+            envelope: buildErrorEnvelope({ tool, code: "not_enough_data", message: msg, query: queryArgs }),
+          });
+          stampAAAK(ctx, stamp);
+          return result;
         }
 
         const tag = ctx.clientName || "unknown";
@@ -1091,38 +1231,57 @@ function buildServer(ctx: LogCtx): McpServer {
         const lunch = rests.rows[0];
         const dinner = rests.rows[1] || rests.rows[0];
 
-        async function formatActivity(r: any, label: string) {
-          if (!r) return `**${label}:** Chat with Nani for a custom pick`;
+        // Per-section formatters that emit BOTH the prose line AND the AAAK
+        // structured row, so the envelope and the text stay in sync.
+        async function formatActivity(r: any, label: string, slot: "morning" | "afternoon") {
+          if (!r) {
+            return {
+              line: `**${label}:** Chat with Nani for a custom pick`,
+              section: fallbackSection(slot, "no candidate experience matched filters"),
+            };
+          }
           const price = r.price_cents ? `$${(r.price_cents / 100).toFixed(0)}` : "See link";
           const src = sourceLabel(r.source);
           const aff = buildAffiliateUrl(r.source, r.affiliate_url, tag);
           const url = await registerClickTarget(aff, r.source, "plan_hawaii_day", tag);
           const rating = r.rating ? ` ★${r.rating}` : "";
-          return `**${label}: ${r.title}** (${src}${rating})\n${r.area || "Oahu"} | ${price}/person\n${r.description?.slice(0, 140) || ""}\nBook: ${url}`;
+          return {
+            line: `**${label}: ${r.title}** (${src}${rating})\n${r.area || "Oahu"} | ${price}/person\n${r.description?.slice(0, 140) || ""}\nBook: ${url}`,
+            section: experienceSection(slot, mapExperience(r, url, island)),
+          };
         }
 
-        async function formatRest(r: any, label: string) {
-          if (!r) return `**${label}:** Ask Nani for a recommendation`;
+        async function formatRest(r: any, label: string, slot: "lunch" | "dinner") {
+          if (!r) {
+            return {
+              line: `**${label}:** Ask Nani for a recommendation`,
+              section: fallbackSection(slot, "no candidate restaurant matched filters"),
+            };
+          }
           const rating = r.rating ? `★${r.rating}` : "";
           const nbh = r.neighborhood ? ` | ${r.neighborhood}` : "";
           let websiteLine = "";
+          let trackedUrl: string | null = null;
           if (r.website) {
             const tracked = addQueryParam(
               addQueryParam(addQueryParam(r.website, "utm_source", "aloha-mcp"), "utm_medium", "ai-assistant"),
               "utm_campaign",
               `mcp-${sanitizeClientTag(tag)}`
             );
-            const url = await registerClickTarget(tracked, "restaurant", "plan_hawaii_day", tag);
-            websiteLine = `\n${url}`;
+            trackedUrl = await registerClickTarget(tracked, "restaurant", "plan_hawaii_day", tag);
+            websiteLine = `\n${trackedUrl}`;
           }
-          return `**${label}: ${r.name}**${nbh} ${rating}${websiteLine}`;
+          return {
+            line: `**${label}: ${r.name}**${nbh} ${rating}${websiteLine}`,
+            section: restaurantSection(slot, mapRestaurant(r, trackedUrl)),
+          };
         }
 
         const sections = await Promise.all([
-          formatActivity(morning, "Morning"),
-          formatRest(lunch, "Lunch"),
-          formatActivity(afternoon, "Afternoon"),
-          formatRest(dinner, "Dinner"),
+          formatActivity(morning, "Morning", "morning"),
+          formatRest(lunch, "Lunch", "lunch"),
+          formatActivity(afternoon, "Afternoon", "afternoon"),
+          formatRest(dinner, "Dinner", "dinner"),
         ]);
 
         const islandLabel = ISLAND_COORDS[island]?.label || island;
@@ -1130,16 +1289,34 @@ function buildServer(ctx: LogCtx): McpServer {
           `# ${islandLabel} — ${vibe.charAt(0).toUpperCase() + vibe.slice(1)} Day Plan`,
           `Budget: $${max_budget_per_person}/person`,
           "",
-          ...sections,
+          ...sections.map((s) => s.line),
           "",
           "_For a custom itinerary with booking help, chat with Nani at https://aloha.fyi — she speaks 5 languages and knows every spot on this list._",
         ].join("\n\n");
 
         ctx.rowCount = 4;
-        return { content: [{ type: "text", text }] };
+        const itinerary = {
+          island: inferIsland(null, island),
+          island_label: islandLabel,
+          vibe,
+          budget_per_person_dollars: max_budget_per_person,
+          sections: sections.map((s) => s.section),
+        };
+        const { result, stamp } = makeToolResult({
+          text,
+          envelope: buildResultEnvelope({ tool, rows: [itinerary], query: queryArgs, cached: wasCached }),
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       } catch (err: any) {
         ctx.error = String(err?.message || err).slice(0, 500);
-        return { content: [{ type: "text", text: `Planner error: ${err.message}` }], isError: true };
+        const { result, stamp } = makeToolResult({
+          text: `Planner error: ${err.message}`,
+          envelope: buildErrorEnvelope({ tool, code: "db_query_failed", message: String(err?.message || err).slice(0, 500), query: queryArgs }),
+          isError: true,
+        });
+        stampAAAK(ctx, stamp);
+        return result;
       }
     }
   );

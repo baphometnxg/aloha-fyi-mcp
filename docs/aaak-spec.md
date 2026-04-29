@@ -7,11 +7,18 @@ target_repo: baphometnxg/aloha-fyi-mcp
 last_updated: 2026-04-29
 ---
 
-> **Decisions locked for A-001:** itinerary uses flat `sections[]` with tagged
-> union; weather has its own envelope without a `booking_url` invariant; text
-> fallback stays for v0.1 + v0.2; both `structuredContent` and JSON-in-text are
-> emitted in A-002 (so older clients keep working without a protocol bump);
-> restaurant `website` standardizes through `/r/{code}` in A-002.
+> **Decisions locked through A-003:**
+> - itinerary uses flat `sections[]` with tagged union;
+> - weather has its own envelope without a `booking_url` invariant;
+> - text fallback stays for v0.1 + v0.2;
+> - **A-002 emits `structuredContent` only — no JSON-in-text fence.** MCP is
+>   forward-compatible: clients on `2025-03-26` ignore the unknown field and
+>   render `text` as they do today. Embedding the envelope inside `text` would
+>   double payload size and pollute human-readable rendering for nothing —
+>   any consumer that wants structured output is on a new-enough client to
+>   read `structuredContent` natively. Revisit only if a real downstream
+>   agent surfaces a hard requirement we don't currently have evidence for.
+> - restaurant `website` standardizes through `/r/{code}` in A-002.
 
 # AAAK v0.1 — Agent-to-Agent Adaptive Knowledge
 

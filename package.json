@@ -11,7 +11,9 @@
     "start": "node dist/stdio.js",
     "start:http": "node dist/http.js",
     "aaak:schema": "tsc && node dist/scripts/emit-aaak-schema.js",
-    "aaak:test": "tsc && node dist/tests/aaak/conform.js"
+    "aaak:test": "tsc && node dist/tests/aaak/conform.js",
+    "aaak:smoke": "tsc && node dist/tests/aaak/adapter-smoke.js",
+    "aaak:gate": "tsc && node dist/tests/aaak/gate-off.js"
   },
   "keywords": [
     "mcp",
