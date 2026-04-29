@@ -13,7 +13,8 @@
     "aaak:schema": "tsc && node dist/scripts/emit-aaak-schema.js",
     "aaak:test": "tsc && node dist/tests/aaak/conform.js",
     "aaak:smoke": "tsc && node dist/tests/aaak/adapter-smoke.js",
-    "aaak:gate": "tsc && node dist/tests/aaak/gate-off.js"
+    "aaak:gate": "tsc && node dist/tests/aaak/gate-off.js",
+    "aaak:verify": "tsc && node dist/scripts/verify-live.js"
   },
   "keywords": [
     "mcp",
