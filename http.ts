@@ -40,6 +40,7 @@ import {
   buildErrorEnvelope,
   experienceSection,
   fallbackSection,
+  getAAAKAllowlist,
   inferIsland,
   isAAAKEnabled,
   makeToolResult,
@@ -1315,11 +1316,19 @@ function buildServer(ctx: LogCtx): McpServer {
         const islandLabel = ISLAND_COORDS[island]?.label || island;
         // Body is built without the trailer; makeToolResult re-appends it
         // (joined by "\n\n") in legacy mode and drops it in AAAK mode.
+        // The trailing "" preserves v1.0.0 byte-equivalence: in v1.0.0 the
+        // trailer lived inside this same array with a "" before it, and
+        // joining ["s4", "", "trailer"] with "\n\n" yields "s4\n\n\n\ntrailer".
+        // We replicate that 4-newline gap by ending with "" so legacy-mode
+        // text ends with "\n\n", and makeToolResult adds another "\n\n" +
+        // trailer. In AAAK mode the trailing "" produces "\n\n" of trailing
+        // whitespace which is functionally invisible in markdown rendering.
         const text = [
           `# ${islandLabel} — ${vibe.charAt(0).toUpperCase() + vibe.slice(1)} Day Plan`,
           `Budget: $${max_budget_per_person}/person`,
           "",
           ...sections.map((s) => s.line),
+          "",
         ].join("\n\n");
         const planTrailer =
           "_For a custom itinerary with booking help, chat with Nani at https://aloha.fyi — she speaks 5 languages and knows every spot on this list._";
@@ -1365,11 +1374,16 @@ const PORT = parseInt(process.env.PORT || "9624", 10);
 
 // REST health check (for Railway)
 app.get("/health", (_req: Request, res: Response) => {
+  // AAAK introspection: presence of `aaak` in /health is the deploy signal
+  // for v1.0.1+ (the AAAK-aware code). Pre-AAAK servers will not include
+  // this key. Allowlist is reported as a count not a list — values are
+  // configuration, not state, but we don't expose individual entries.
+  const aaakAllowlist = getAAAKAllowlist();
   res.json({
     status: "ok",
     service: "aloha-fyi-mcp",
     protocol: "MCP Streamable HTTP",
-    version: "1.0.0",
+    version: "1.0.1",
     tools: [
       "search_hawaii_tours",
       "get_hawaii_deals",
@@ -1383,10 +1397,15 @@ app.get("/health", (_req: Request, res: Response) => {
     restaurants: 547,
     islands: ["oahu", "maui", "big_island", "kauai"],
     db: !!pool,
-    observability: "layer1+layer2+layer3",
+    observability: "layer1+layer2+layer3+aaak",
     rate_limit_per_min: RATE_LIMIT_PER_MIN,
     daily_quota_per_ip: MCP_DAILY_QUOTA,
     cache: cacheStats(),
+    aaak: {
+      protocol: "aaak/0.1",
+      enabled: isAAAKEnabled(),
+      allowlist_size: aaakAllowlist === null ? null : aaakAllowlist.length,
+    },
   });
 });
 
