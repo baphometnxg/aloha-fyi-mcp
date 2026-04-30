@@ -28,7 +28,7 @@
     "ai-assistant",
     "affiliate"
   ],
-  "author": "Michael Crain <alohatours@proton.me>",
+  "author": "Michael Crain <michael@aloha.fyi>",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.24.0",

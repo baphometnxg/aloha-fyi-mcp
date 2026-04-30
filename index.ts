@@ -68,15 +68,23 @@ server.tool(
     let paramIdx = 1;
 
     if (island && island !== "any") {
-      conditions.push(`e.area ILIKE $${paramIdx}`);
-      const areaMap: Record<string, string> = {
-        oahu: '%',  // Oahu areas: waikiki, north_shore, east_oahu, etc.
-        maui: 'maui%',
-        big_island: '%',  // Will need island field
-        kauai: '%',
+      // Audit-fix (2026-04-26): area is a city/region (waikiki, lahaina, kona)
+      // not an island. Map to per-island area whitelist via SIMILAR TO instead
+      // of a single ILIKE wildcard — the previous `oahu: '%'` matched ALL
+      // experiences (including Maui), so the island filter was a no-op.
+      const islandAreaPatterns: Record<string, string> = {
+        oahu: '(waikiki|honolulu|north[_ ]?shore|east[_ ]?oahu|leeward|ko[_ ]?olina|kapolei|kailua|haleiwa|pearl[_ ]?harbor|chinatown|kakaako|aiea|hawaii[_ ]?kai|manoa|downtown|diamond[_ ]?head)',
+        maui: '(maui|lahaina|wailea|kihei|hana|kahului|paia|napili|kapalua|haleakala)',
+        big_island: '(big[_ ]?island|kona|hilo|kohala|volcano|waikoloa|waimea|kailua[_ ]?kona)',
+        kauai: '(kauai|lihue|poipu|princeville|hanalei|kapaa|waimea[_ ]?canyon|napali)',
       };
-      params.push(areaMap[island] || '%');
-      paramIdx++;
+      const pattern = islandAreaPatterns[island];
+      if (pattern) {
+        conditions.push(`e.area ~* $${paramIdx}`);
+        params.push(pattern);
+        paramIdx++;
+      }
+      // If island is unknown, don't add a filter (better than wildcard match).
     }
 
     if (max_price_dollars) {

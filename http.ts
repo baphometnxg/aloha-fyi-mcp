@@ -568,6 +568,12 @@ function buildServer(ctx: LogCtx): McpServer {
       title: "Search Hawaii Tours",
       description:
         "Search 2,583 bookable Hawaii tours and activities by keyword, island, price range. Returns tours from Viator, GetYourGuide, Klook, and Groupon with affiliate booking links. Use this when users ask about Hawaii tours, activities, or things to do.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
       inputSchema: {
         query: z
           .string()
@@ -696,6 +702,12 @@ function buildServer(ctx: LogCtx): McpServer {
       title: "Hawaii Budget Deals",
       description:
         "Find budget deals and discounts for Hawaii activities. Returns Groupon deals and low-price options sorted cheapest first. Use when users want affordable Hawaii experiences or budget travel tips.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
       inputSchema: {
         activity: z.string().describe("Type of activity, e.g. 'snorkeling', 'helicopter', 'luau', 'food tour'"),
         max_price_dollars: z.number().default(100).describe("Maximum price per person in USD"),
@@ -794,6 +806,12 @@ function buildServer(ctx: LogCtx): McpServer {
       title: "Hawaii Events & Concerts",
       description:
         "Find upcoming events, concerts, festivals, and nightlife across all Hawaiian islands. 579+ events from 70+ venues, updated weekly. Use when users ask what's happening in Hawaii or want entertainment options.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
       inputSchema: {
         query: z.string().default("").describe("Type of event, e.g. 'live music', 'luau', 'concert', 'food festival'"),
         island: z.enum(["oahu", "maui", "big_island", "kauai", "any"]).default("any"),
@@ -901,6 +919,12 @@ function buildServer(ctx: LogCtx): McpServer {
       title: "Hawaii Weather & Surf Conditions",
       description:
         "Current weather, forecast, and surf/wind conditions for any Hawaiian island. Use this when users ask 'what's the weather in Maui this week' or 'is it good surf conditions on the North Shore today'. Returns temperature, precipitation, wind speed, UV index, and a 3-day forecast.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
       inputSchema: {
         island: z
           .enum(["oahu", "maui", "big_island", "kauai"])
@@ -1006,6 +1030,12 @@ function buildServer(ctx: LogCtx): McpServer {
       title: "Hawaii Restaurants & Food",
       description:
         "Find restaurants, coffee shops, poke bars, ramen, bakeries, and food trucks in Waikiki and across Oahu. 540+ curated spots across fine dining, casual, local plates, and specialty categories. Use when users ask 'where should I eat in Waikiki', 'best poke on Oahu', 'where to grab coffee', or 'cheap eats near me'.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
       inputSchema: {
         query: z.string().default("").describe("What to look for, e.g. 'poke', 'sushi', 'breakfast', 'local plate lunch'"),
         category: z
@@ -1163,6 +1193,12 @@ function buildServer(ctx: LogCtx): McpServer {
       title: "Plan a Hawaii Day",
       description:
         "Build a same-day or trip itinerary for a Hawaiian island. Returns a morning activity, lunch spot, afternoon activity, and dinner spot — picked from our live catalog of tours, food, and experiences. Use when users ask 'plan my day in Oahu', 'what should I do Saturday in Maui', or 'family itinerary for Kauai'.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
       inputSchema: {
         island: z
           .enum(["oahu", "maui", "big_island", "kauai"])
