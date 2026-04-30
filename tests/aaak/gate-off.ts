@@ -184,5 +184,43 @@ process.env.AAAK_CLIENTS = "claude-desktop";
 
 reset();
 
+console.log("\n── Byte-equivalence regressions ─────────────────────");
+
+// v1.0.0 plan_hawaii_day produced "...\n\n\n\ntrailer" (4 newlines before
+// trailer) because the trailer was inside an array literal joined with
+// "\n\n", with an "" before it. The AAAK refactor must reproduce that
+// exact byte pattern in legacy mode. The simulated body below mimics the
+// shape of the array AFTER the trailing "" was added back in v0.1.1:
+//   ["heading", "budget", "", section1, section2, section3, section4, ""]
+// joined with "\n\n" then makeToolResult appends "\n\n" + trailer.
+{
+  const simulatedBody = [
+    "# Oʻahu — Chill Day Plan",
+    "Budget: $300/person",
+    "",
+    "**Morning: M**",
+    "**Lunch: L**",
+    "**Afternoon: A**",
+    "**Dinner: D**",
+    "",
+  ].join("\n\n");
+  const trailer = "_For a custom itinerary..._";
+  const { result } = makeToolResult({
+    text: simulatedBody,
+    trailer,
+    envelope: buildEmptyEnvelope({ tool: "plan_hawaii_day" }),
+  });
+  const text = (result.content[0] as any).text as string;
+  const dinnerEnd = text.indexOf("**Dinner: D**") + "**Dinner: D**".length;
+  const trailerStart = text.indexOf(trailer);
+  const between = text.slice(dinnerEnd, trailerStart);
+  assert(
+    between === "\n\n\n\n",
+    `plan_hawaii_day legacy byte-equivalence: expected "\\n\\n\\n\\n" (4 newlines) between dinner and trailer, got ${JSON.stringify(between)}`,
+  );
+}
+
+reset();
+
 console.log(`\n${failed === 0 ? "all gate invariants hold" : `${failed} invariant(s) violated`}.`);
 process.exit(failed === 0 ? 0 : 1);
